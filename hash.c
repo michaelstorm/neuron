@@ -1,5 +1,11 @@
 int main()
 {
-    int x = 2 * 3 + 4;
-    x = 5;
+    int x = 1;
+    if (2) {
+        int y = 3;
+    }
+    else {
+        int a = 5;
+    }
+    int z = 4;
 }

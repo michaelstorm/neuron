@@ -54,7 +54,7 @@ class SetValue(namedtuple('SetValue', ['name', 'value'])):
 class Zero(namedtuple('Zero', ['name'])):
     def to_bf(self, declaration_positions):
         pos = declaration_positions[self.name]
-        return '(SetValue {}[-]{})'.format('>' * pos, '<' * pos)
+        return '(Zero {}[-]{})'.format('>' * pos, '<' * pos)
 
 class Add(namedtuple('Add', ['result_name', 'first_name', 'second_name'])):
     def to_bf(self, declaration_positions):
@@ -73,3 +73,8 @@ class Multiply(namedtuple('Multiply', ['result_name', 'first_name', 'second_name
         return '(Multiply {}[-{}{}{}]{})'.format('>' * first_pos, '<' * first_pos,
                                                  copy_command.to_bf(declaration_positions),
                                                  '>' * first_pos, '<' * first_pos)
+
+class Right(namedtuple('Right', ['count'])):
+    def to_bf(self, declaration_positions):
+        pos = declaration_positions[self.name]
+        return '(Right {}{}{})'.format('>' * pos, '+' * int(self.value), '<' * pos)
