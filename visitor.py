@@ -67,7 +67,8 @@ class Block:
         return 'Block(index=%s, ops=%s, next=%s)' % (self.index, self.ops.__repr__(), next_id)
 
 
-IfBlock = namedtuple('IfBlock', ['index', 'cond_block', 'true_blocks', 'false_blocks'])
+IfBlock = namedtuple('IfBlock', ['index', 'cond_block', 'true_blocks', 'false_blocks',
+                                 'decl_name'])
 
 
 class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
@@ -162,11 +163,13 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
     def visit_Constant(self, node):
         self.lprint(node.__class__.__name__)
+        self.aprint('value', node.value)
 
         return [SetValue(name=self.decl_name_stack[-1], value=node.value)]
 
     def visit_Assignment(self, node):
         self.lprint(node.__class__.__name__)
+        self.aprint('name', node.name)
 
         result_name = node.lvalue.name
         self.push_decl(result_name)
@@ -199,6 +202,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         false_blocks = self.visit_child(node.iffalse)
 
         if_block = self.create_if_block(
+            decl_name = decl_name,
             cond_block = cond_block,
             true_blocks = true_blocks,
             false_blocks = false_blocks
@@ -251,11 +255,6 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         print()
 
         main_blocks = self.functions['main']
-        print('main_blocks', main_blocks)
-        print()
-
-        output = ''
-
         declaration_positions = {decl_name: index
                                  for (index, decl_name)
                                  in enumerate(self.declarations)}
@@ -273,16 +272,78 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                 blocks_by_index[block.index] = block
                 if isinstance(block, IfBlock):
                     add_blocks_to_map(block.true_blocks)
-                    add_blocks_to_map(block.false_blocks)
+                    if block.false_blocks:
+                        add_blocks_to_map(block.false_blocks)
 
         add_blocks_to_map(main_blocks)
 
+        def ip_offset(current_index, new_index):
+            return ((new_index - current_index) % len(blocks_by_index)) - 1
+
+        start_ip = 1
+        output = ''
+
+        STOP_INDICATOR_INDEX = 0
+        KNOWN_ZERO = STOP_INDICATOR_INDEX + 1
+
+        START_IP_WORKSPACE = KNOWN_ZERO + 1
+        IP_INDEX = START_IP_WORKSPACE
+        IP_ZERO_INDICATOR = IP_INDEX + 1
+        END_IP_WORKSPACE = IP_ZERO_INDICATOR + 4
+
+        START_STACK = END_IP_WORKSPACE + 1
+
+        output += '!+{}'.format(
+            bf_travel(STOP_INDICATOR_INDEX, IP_INDEX))
+
+        output += ' (IPSetup {}+ 3>+>+ 4<) {} [\n'.format(start_ip,
+            bf_travel(IP_INDEX, STOP_INDICATOR_INDEX))
+
         for index in range(len(blocks_by_index)):
             block = blocks_by_index[index]
+            print('%d: %s' % (index, block))
+
+            output += '    ![{} (IPCheck >+< [->->]3>[>] {}) !(Block [-{}'.format(
+                bf_travel(STOP_INDICATOR_INDEX, IP_INDEX),
+                bf_travel(END_IP_WORKSPACE, IP_ZERO_INDICATOR),
+                bf_travel(IP_ZERO_INDICATOR, START_STACK))
+
             if isinstance(block, IfBlock):
-                pass
+                for op in block.cond_block:
+                    output += op.to_bf(declaration_positions)
+
+                target_index = block.true_blocks[0].index
+                new_ip = ip_offset(block.index, target_index)
+
+                cond_result_pos = START_STACK + declaration_positions[block.decl_name]
+                output += ' (GoToTrue {}[[-]{}{}+{}]{})'.format(
+                    bf_travel(START_STACK, cond_result_pos),
+                    bf_travel(cond_result_pos, IP_INDEX),
+                    new_ip,
+                    bf_travel(IP_INDEX, cond_result_pos),
+                    bf_travel(cond_result_pos, START_STACK))
+
             else:
                 for op in block.ops:
                     output += op.to_bf(declaration_positions)
 
+                if block.next is None:
+                    output += ' !(EndProgram {}-{})'.format(
+                        bf_travel(START_STACK, STOP_INDICATOR_INDEX),
+                        bf_travel(STOP_INDICATOR_INDEX, START_STACK))
+                else:
+                    new_ip = ip_offset(block.index, block.next.index)
+                    output += ' !(NextBlock {}{}+{})'.format(
+                        bf_travel(START_STACK, IP_INDEX),
+                        new_ip,
+                        bf_travel(IP_INDEX, START_STACK))
+
+            output += ' {}]) {}] {}\n'.format(
+                bf_travel(START_STACK, IP_ZERO_INDICATOR),
+                bf_travel(IP_ZERO_INDICATOR, KNOWN_ZERO),
+                bf_travel(KNOWN_ZERO, STOP_INDICATOR_INDEX))
+
+        output += ']\n'
+
+        print()
         return output
