@@ -10,6 +10,8 @@ class TextColor(Enum):
 class BackgroundColor(Enum):
     DEFAULT = 49
     BLUE = 44
+    RED = 41
+    LIGHT_RED = 101
     LIGHT_GREEN = 102
     LIGHT_MAGENTA = 105
 
@@ -36,6 +38,7 @@ class BrainfuckRuntime:
     def __init__(self):
         self.tape = [0] * 32
         self.pointer = 0
+        self.output = ''
 
     def print_state(self, instr_count, op_start_index, op_end_index, code):
         colored_code = "{}{}{}".format(
@@ -68,6 +71,10 @@ class BrainfuckRuntime:
 
         print('{}{}{}\n'.format(prefix, '({}) '.format(self.pointer).ljust(5), colored_tape))
 
+        if len(self.output) > 0:
+            text = colored_text_background(BackgroundColor.RED, TextColor.DEFAULT, value)
+            print(text + '\n')
+
     def execute(self, code):
         index = 0
         instr_count = 0
@@ -84,14 +91,14 @@ class BrainfuckRuntime:
             if op == '!' and not skip_breakpoints:
                 step_through = True
 
-            elif ord(op) in range(ord('0'), ord('9')):
+            elif ord(op) in range(ord('0'), ord('9') + 1):
                 digit = ord(op) - ord('0')
                 if number is None:
                     number = digit
                 else:
                     number = number*10 + digit
 
-            elif op in ('+', '-', '>', '<', '[', ']'):
+            elif op in ('+', '-', '>', '<', '.', '[', ']'):
                 if op != last_op:
                     self.print_state(instr_count, op_start_index, index, code)
                     if step_through:
@@ -119,6 +126,11 @@ class BrainfuckRuntime:
                         self.pointer += 1
                     elif op == '<':
                         self.pointer -= 1
+
+                    elif op == '.':
+                        value = chr(self.tape[self.pointer])
+                        self.output += value
+
                     elif op == '[':
                         last_op = None
                         if self.tape[self.pointer] == 0:
@@ -129,6 +141,7 @@ class BrainfuckRuntime:
                                     stack += 1
                                 elif code[index] == ']':
                                     stack -= 1
+
                     elif op == ']':
                         last_op = None
                         stack = 1

@@ -164,8 +164,9 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
     def visit_Constant(self, node):
         self.lprint(node.__class__.__name__)
         self.aprint('value', node.value)
+        self.aprint('type', node.type)
 
-        return [SetValue(name=self.decl_name_stack[-1], value=node.value)]
+        return [SetValue(name=self.decl_name_stack[-1], value=node.value, type=node.type)]
 
     def visit_Assignment(self, node):
         self.lprint(node.__class__.__name__)
@@ -237,6 +238,28 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         return []
 
+    def visit_FuncCall(self, node):
+        self.lprint(node.__class__.__name__)
+        self.aprint('name', node.name.name)
+
+        ops = []
+
+        if node.name.name == 'putchar':
+            arg_index = 0
+            arg = node.args.exprs[arg_index]
+
+            result_name = '{}_{}'.format(node.name.name, arg_index)
+            self.push_decl(result_name)
+            decl_name = self.push_decl_mod(result_name)
+
+            ops += list(self.visit_child(arg))
+            ops += [Print(output_name=decl_name)]
+
+            self.pop_decl()
+            self.pop_decl()
+
+        return ops
+
     def generic_visit(self, node):
         self.lprint(node.__class__.__name__)
         return self.visit_children(node)
@@ -280,7 +303,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         def ip_offset(current_index, new_index):
             return ((new_index - current_index) % len(blocks_by_index)) - 1
 
-        start_ip = 1
+        start_ip = main_blocks[0].index - 1
         output = ''
 
         STOP_INDICATOR_INDEX = 0
@@ -310,22 +333,37 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
             if isinstance(block, IfBlock):
                 for op in block.cond_block:
-                    output += op.to_bf(declaration_positions)
+                    output += op.to_bf(declaration_positions, len(declaration_positions))
 
-                target_index = block.true_blocks[0].index
-                new_ip = ip_offset(block.index, target_index)
+                true_ip = ip_offset(block.index, block.true_blocks[0].index)
+                false_ip = None
+                if block.false_blocks is not None:
+                    false_ip = ip_offset(block.index, block.false_blocks[0].index)
 
                 cond_result_pos = START_STACK + declaration_positions[block.decl_name]
-                output += ' (GoToTrue {}[[-]{}{}+{}]{})'.format(
+
+                def bf_set_ip(new_ip):
+                    return '{}{}+{}'.format(
+                        bf_travel(cond_result_pos, IP_INDEX),
+                        new_ip,
+                        bf_travel(IP_INDEX, cond_result_pos))
+
+                output += ' !{}{} (GoToTrue [[-]{}{}])'.format(
                     bf_travel(START_STACK, cond_result_pos),
-                    bf_travel(cond_result_pos, IP_INDEX),
-                    new_ip,
-                    bf_travel(IP_INDEX, cond_result_pos),
+                    '>+<' if false_ip is not None else '',
+                    bf_set_ip(true_ip),
+                    '>-<' if false_ip is not None else '',
                     bf_travel(cond_result_pos, START_STACK))
+
+                if false_ip is not None:
+                    output += ' (GoToFalse >[-<{}>]<)'.format(
+                        bf_set_ip(false_ip))
+
+                output += ' {}'.format(bf_travel(cond_result_pos, START_STACK))
 
             else:
                 for op in block.ops:
-                    output += op.to_bf(declaration_positions)
+                    output += op.to_bf(declaration_positions, len(declaration_positions))
 
                 if block.next is None:
                     output += ' !(EndProgram {}-{})'.format(
