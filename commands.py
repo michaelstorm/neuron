@@ -89,4 +89,10 @@ class Multiply(namedtuple('Multiply', ['result_name', 'first_name', 'second_name
 class Print(namedtuple('Print', ['output_name'])):
     def to_bf(self, declaration_positions, stack_index):
         pos = declaration_positions[self.output_name]
-        return '(Print {}.{})'.format('{}>'.format(pos), '{}<'.format(pos))
+        return '(Print !{}.{})'.format('{}>'.format(pos), '{}<'.format(pos))
+
+
+class Input(namedtuple('Input', ['input_name'])):
+    def to_bf(self, declaration_positions, stack_index):
+        pos = declaration_positions[self.input_name]
+        return '(Input {},{})'.format('{}>'.format(pos), '{}<'.format(pos))

@@ -1,4 +1,5 @@
 int main()
 {
-    putchar('c');
+    int x = getchar();
+    putchar(x);
 }

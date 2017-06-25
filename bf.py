@@ -35,10 +35,11 @@ def colored_text_background(background_color, text_color, text):
 
 
 class BrainfuckRuntime:
-    def __init__(self):
+    def __init__(self, declarations):
         self.tape = [0] * 32
         self.pointer = 0
         self.output = ''
+        self.declarations = declarations
 
     def print_state(self, instr_count, op_start_index, op_end_index, code):
         colored_code = "{}{}{}".format(
@@ -71,8 +72,23 @@ class BrainfuckRuntime:
 
         print('{}{}{}\n'.format(prefix, '({}) '.format(self.pointer).ljust(5), colored_tape))
 
+        declaration_positions = {decl_name: index
+                                 for (index, decl_name)
+                                 in enumerate(self.declarations)}
+
+        max_declaration_length = max([len(name) for name in declaration_positions])
+        reversed_declarations = {value: key for (key, value) in declaration_positions.items()}
+        for position in sorted(reversed_declarations.keys()):
+            padded_name = (reversed_declarations[position] + ':').ljust(max_declaration_length+2)
+            tape_position = 8 + position
+            value = self.tape[tape_position]
+            if self.pointer == tape_position:
+                value = colored_text_background(BackgroundColor.LIGHT_MAGENTA, TextColor.BLACK, value)
+            print('[{}] {}{}'.format(position, padded_name, value))
+        print()
+
         if len(self.output) > 0:
-            text = colored_text_background(BackgroundColor.RED, TextColor.DEFAULT, value)
+            text = colored_text_background(BackgroundColor.RED, TextColor.DEFAULT, self.output)
             print(text + '\n')
 
     def execute(self, code):
@@ -82,7 +98,7 @@ class BrainfuckRuntime:
         step_through = False
         number = None
         op_start_index = 0
-        previous_input_line = None
+        previous_input_line = 'c'
         skip_breakpoints = False
 
         while index < len(code):
@@ -98,7 +114,7 @@ class BrainfuckRuntime:
                 else:
                     number = number*10 + digit
 
-            elif op in ('+', '-', '>', '<', '.', '[', ']'):
+            elif op in ('+', '-', '>', '<', '.', ',', '[', ']'):
                 if op != last_op:
                     self.print_state(instr_count, op_start_index, index, code)
                     if step_through:
@@ -106,6 +122,7 @@ class BrainfuckRuntime:
                         if len(line) == 0:
                             line = previous_input_line
 
+                        command = line[0]
                         if line == 'c':
                             step_through = False
                         elif line == 'q':
@@ -130,6 +147,14 @@ class BrainfuckRuntime:
                     elif op == '.':
                         value = chr(self.tape[self.pointer])
                         self.output += value
+
+                    elif op == ',':
+                        line = ''
+                        while len(line) == 0:
+                            print('> ', end='')
+                            line = input()
+
+                        self.tape[self.pointer] = ord(line[0])
 
                     elif op == '[':
                         last_op = None
