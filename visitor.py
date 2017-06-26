@@ -51,23 +51,6 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.level -= 1
         return result
 
-    def push_decl_mod(self, decl_name):
-        mod_count = self.modifications_by_decl_name.get(decl_name, 0)
-        self.modifications_by_decl_name[decl_name] = mod_count + 1
-        return self.push_sub_decl(mod_count)
-
-    def push_sub_decl(self, suffix):
-        decl_name = '{}_{}'.format(self.decl_name_stack[-1], suffix)
-        self.push_decl(decl_name)
-        return decl_name
-
-    def push_decl(self, decl_name):
-        self.declarations.add(decl_name)
-        self.decl_name_stack.append(decl_name)
-
-    def pop_decl(self):
-        self.decl_name_stack.pop()
-
     def visit_assignment_body(self, result_name, assignment_body):
         self.push_decl(result_name)
 
@@ -89,11 +72,36 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         else:
             return []
 
-    def visit_Decl(self, node):
+    def generic_visit(self, node):
         self.lprint(node.__class__.__name__)
-        self.aprint('name', node.name)
+        return self.visit_children(node)
 
-        return self.visit_assignment_body(node.name, node.init)
+    def create_block(self, ops=[]):
+        block = Block(self.next_block_index, ops)
+        self.next_block_index += 1
+        return block
+
+    def create_if_block(self, **if_kwargs):
+        block = IfBlock(self.next_block_index, **if_kwargs)
+        self.next_block_index += 1
+        return block
+
+    def push_decl_mod(self, decl_name):
+        mod_count = self.modifications_by_decl_name.get(decl_name, 0)
+        self.modifications_by_decl_name[decl_name] = mod_count + 1
+        return self.push_sub_decl(mod_count)
+
+    def push_sub_decl(self, suffix):
+        decl_name = '{}_{}'.format(self.decl_name_stack[-1], suffix)
+        self.push_decl(decl_name)
+        return decl_name
+
+    def push_decl(self, decl_name):
+        self.declarations.add(decl_name)
+        self.decl_name_stack.append(decl_name)
+
+    def pop_decl(self):
+        self.decl_name_stack.pop()
 
     def visit_Assignment(self, node):
         self.lprint(node.__class__.__name__)
@@ -124,12 +132,38 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         return ops
 
+    def visit_Compound(self, node):
+        self.lprint(node.__class__.__name__)
+
+        results = self.visit_children(node)
+
+        blocks = [self.create_block()]
+        for result in results:
+            if isinstance(result, IfBlock):
+                next_block = self.create_block()
+                result.true_blocks[-1].next = next_block
+                if result.false_blocks:
+                    result.false_blocks[-1].next = next_block
+                blocks[-1].next = result
+                blocks.append(result)
+                blocks.append(next_block)
+            else:
+                blocks[-1].ops.append(result)
+
+        return blocks
+
     def visit_Constant(self, node):
         self.lprint(node.__class__.__name__)
         self.aprint('value', node.value)
         self.aprint('type', node.type)
 
         return [SetValue(name=self.decl_name_stack[-1], value=node.value, type=node.type)]
+
+    def visit_Decl(self, node):
+        self.lprint(node.__class__.__name__)
+        self.aprint('name', node.name)
+
+        return self.visit_assignment_body(node.name, node.init)
 
     def visit_ID(self, node):
         self.lprint(node.__class__.__name__)
@@ -164,33 +198,6 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         return [if_block]
 
-    def visit_Compound(self, node):
-        self.lprint(node.__class__.__name__)
-
-        results = self.visit_children(node)
-
-        blocks = [self.create_block()]
-        for result in results:
-            if isinstance(result, IfBlock):
-                next_block = self.create_block()
-                result.true_blocks[-1].next = next_block
-                if result.false_blocks:
-                    result.false_blocks[-1].next = next_block
-                blocks[-1].next = result
-                blocks.append(result)
-                blocks.append(next_block)
-            else:
-                blocks[-1].ops.append(result)
-
-        return blocks
-
-    def visit_FuncDef(self, node):
-        self.lprint(node.__class__.__name__)
-
-        self.functions[node.decl.name] = self.visit_child(node.body)
-
-        return []
-
     def visit_FuncCall(self, node):
         self.lprint(node.__class__.__name__)
         self.aprint('name', node.name.name)
@@ -214,31 +221,22 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         elif node.name.name == 'getchar':
             result_name = '{}_ret'.format(node.name.name)
             self.push_decl(result_name)
-            decl_name = result_name # self.push_decl_mod(result_name)
 
-            ops += [Input(input_name=decl_name)]
+            ops += [Input(input_name=result_name)]
 
             self.pop_decl()
-            # self.pop_decl()
 
             if len(self.decl_name_stack) > 0:
-                ops += [Move(from_name=decl_name, to_name=self.decl_name_stack[-1])]
+                ops += [Move(from_name=result_name, to_name=self.decl_name_stack[-1])]
 
         return ops
 
-    def generic_visit(self, node):
+    def visit_FuncDef(self, node):
         self.lprint(node.__class__.__name__)
-        return self.visit_children(node)
 
-    def create_block(self, ops=[]):
-        block = Block(self.next_block_index, ops)
-        self.next_block_index += 1
-        return block
+        self.functions[node.decl.name] = self.visit_child(node.body)
 
-    def create_if_block(self, **if_kwargs):
-        block = IfBlock(self.next_block_index, **if_kwargs)
-        self.next_block_index += 1
-        return block
+        return []
 
     def to_bf(self):
         print()
