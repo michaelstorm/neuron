@@ -1,7 +1,7 @@
 from collections import namedtuple
 from pycparser import c_parser, c_ast, parse_file
-from commands import *
-from ordered_set import OrderedSet
+from .commands import *
+from .ordered_set import OrderedSet
 
 
 class Block:
@@ -15,8 +15,21 @@ class Block:
         return 'Block(index=%s, ops=%s, next=%s)' % (self.index, self.ops.__repr__(), next_id)
 
 
-IfBlock = namedtuple('IfBlock', ['index', 'cond_block', 'true_blocks', 'false_blocks',
-                                 'decl_name'])
+class IfBlock:
+    def __init__(self, index, cond_block, true_blocks, false_blocks, decl_name):
+        self.index = index
+        self.cond_block = cond_block
+        self.true_blocks = true_blocks
+        self.false_blocks = false_blocks
+        self.decl_name = decl_name
+
+    def __str__(self):
+        return "IfBlock(index={}, decl_name={}, true_blocks={}, false_blocks={}, cond_block={})".format(
+            self.index, self.decl_name, [b.index for b in self.true_blocks or []],
+            [b.index for b in self.false_blocks or []], self.cond_block)
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
@@ -82,6 +95,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         return block
 
     def create_if_block(self, **if_kwargs):
+        print(if_kwargs)
         block = IfBlock(self.next_block_index, **if_kwargs)
         self.next_block_index += 1
         return block
@@ -171,7 +185,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         return [
             Zero(name=self.decl_name_stack[-1]),
-            Move(from_name=node.name, to_name=self.decl_name_stack[-1])
+            Copy(from_name=node.name, to_name=self.decl_name_stack[-1])
         ]
 
     def visit_If(self, node):
@@ -260,7 +274,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         def ip_offset(current_index, new_index):
             return ((new_index - current_index) % len(blocks_by_index)) - 1
 
-        start_ip = main_blocks[0].index - 1
+        start_ip = main_blocks[0].index
         output = ''
 
         STOP_INDICATOR_INDEX = 0

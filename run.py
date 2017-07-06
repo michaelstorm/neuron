@@ -1,6 +1,7 @@
+from neuron.visitor import BrainfuckCompilerVisitor
+from neuron.bf import BrainfuckRuntime
+
 from pycparser import parse_file
-from visitor import BrainfuckCompilerVisitor
-from bf import BrainfuckRuntime
 
 
 if __name__ == "__main__":
