@@ -1,4 +1,5 @@
 from enum import Enum
+import re
 import sys
 
 
@@ -35,13 +36,29 @@ def colored_text_background(background_color, text_color, text):
 
 
 class BrainfuckRuntime:
-    def __init__(self, declarations):
+    def __init__(self, declarations, source, symbol_table):
         self.tape = [0] * 32
         self.pointer = 0
         self.output = ''
         self.declarations = declarations
+        self.source = source
+        self.symbol_table = symbol_table
 
     def print_state(self, instr_count, op_start_index, op_end_index, code):
+        source_line_index = None
+        for bf_indices, coord in self.symbol_table.items():
+            if op_start_index >= bf_indices[0] and op_start_index < bf_indices[1]:
+                source_line_index = int(re.match(r'.*:(\d+)', str(coord)).group(1))
+
+        for line_index, line in enumerate(self.source.strip().split('\n')):
+            if line_index == source_line_index:
+                print(colored_text_background(BackgroundColor.LIGHT_GREEN, TextColor.BLACK,
+                                              line))
+            else:
+                print(line)
+
+        print()
+
         colored_code = "{}{}{}".format(
             code[:op_start_index],
             colored_text_background(BackgroundColor.LIGHT_GREEN, TextColor.BLACK,

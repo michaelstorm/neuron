@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from pycparser import c_parser, c_ast, parse_file
 from .commands import *
 from .ordered_set import OrderedSet
@@ -64,7 +64,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.level -= 1
         return result
 
-    def visit_assignment_body(self, result_name, assignment_body):
+    def visit_assignment_body(self, coord, result_name, assignment_body):
         self.push_decl(result_name)
 
         if assignment_body:
@@ -73,8 +73,8 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             ops = []
             ops = list(self.visit_child(assignment_body))
             ops += [
-                Zero(name=result_name),
-                Move(from_name=decl_name, to_name=result_name)
+                Zero(coord=coord, name=result_name),
+                Move(coord=coord, from_name=decl_name, to_name=result_name)
             ]
 
             self.pop_decl()
@@ -95,7 +95,6 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         return block
 
     def create_if_block(self, **if_kwargs):
-        print(if_kwargs)
         block = IfBlock(self.next_block_index, **if_kwargs)
         self.next_block_index += 1
         return block
@@ -118,13 +117,13 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.decl_name_stack.pop()
 
     def visit_Assignment(self, node):
-        self.lprint(node.__class__.__name__)
+        self.lprint(node.__class__.__name__, node.coord)
         self.aprint('name', node.lvalue.name)
 
-        return self.visit_assignment_body(node.lvalue.name, node.rvalue)
+        return self.visit_assignment_body(node.coord, node.lvalue.name, node.rvalue)
 
     def visit_BinaryOp(self, node):
-        self.lprint(node.__class__.__name__)
+        self.lprint(node.__class__.__name__, node.coord)
         self.aprint('op', node.op)
 
         ops = []
@@ -138,16 +137,16 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.pop_decl()
 
         if node.op == '+':
-            ops.append(Add(result_name=self.decl_name_stack[-1], first_name=first_name,
-                           second_name=second_name))
+            ops.append(Add(coord=node.coord, result_name=self.decl_name_stack[-1],
+                           first_name=first_name, second_name=second_name))
         elif node.op == '*':
-            ops.append(Multiply(result_name=self.decl_name_stack[-1], first_name=first_name,
-                                second_name=second_name))
+            ops.append(Multiply(coord=node.coord, result_name=self.decl_name_stack[-1],
+                                first_name=first_name, second_name=second_name))
 
         return ops
 
     def visit_Compound(self, node):
-        self.lprint(node.__class__.__name__)
+        self.lprint(node.__class__.__name__, node.coord)
 
         results = self.visit_children(node)
 
@@ -167,29 +166,30 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         return blocks
 
     def visit_Constant(self, node):
-        self.lprint(node.__class__.__name__)
+        self.lprint(node.__class__.__name__, node.coord)
         self.aprint('value', node.value)
         self.aprint('type', node.type)
 
-        return [SetValue(name=self.decl_name_stack[-1], value=node.value, type=node.type)]
+        return [SetValue(coord=node.coord, name=self.decl_name_stack[-1], value=node.value,
+                         type=node.type)]
 
     def visit_Decl(self, node):
-        self.lprint(node.__class__.__name__)
+        self.lprint(node.__class__.__name__, node.coord)
         self.aprint('name', node.name)
 
-        return self.visit_assignment_body(node.name, node.init)
+        return self.visit_assignment_body(node.coord, node.name, node.init)
 
     def visit_ID(self, node):
-        self.lprint(node.__class__.__name__)
+        self.lprint(node.__class__.__name__, node.coord)
         self.aprint('name', node.name)
 
         return [
-            Zero(name=self.decl_name_stack[-1]),
-            Copy(from_name=node.name, to_name=self.decl_name_stack[-1])
+            Zero(coord=node.coord, name=self.decl_name_stack[-1]),
+            Copy(coord=node.coord, from_name=node.name, to_name=self.decl_name_stack[-1])
         ]
 
     def visit_If(self, node):
-        self.lprint(node.__class__.__name__)
+        self.lprint(node.__class__.__name__, node.coord)
 
         result_name = 'if'
         self.push_decl(result_name)
@@ -213,7 +213,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         return [if_block]
 
     def visit_FuncCall(self, node):
-        self.lprint(node.__class__.__name__)
+        self.lprint(node.__class__.__name__, node.coord)
         self.aprint('name', node.name.name)
 
         ops = []
@@ -227,7 +227,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             decl_name = self.push_decl_mod(result_name)
 
             ops += list(self.visit_child(arg))
-            ops += [Print(output_name=decl_name)]
+            ops += [Print(coord=node.coord, output_name=decl_name)]
 
             self.pop_decl()
             self.pop_decl()
@@ -236,17 +236,18 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             result_name = '{}_ret'.format(node.name.name)
             self.push_decl(result_name)
 
-            ops += [Input(input_name=result_name)]
+            ops += [Input(coord=node.coord, input_name=result_name)]
 
             self.pop_decl()
 
             if len(self.decl_name_stack) > 0:
-                ops += [Move(from_name=result_name, to_name=self.decl_name_stack[-1])]
+                ops += [Move(coord=node.coord, from_name=result_name,
+                             to_name=self.decl_name_stack[-1])]
 
         return ops
 
     def visit_FuncDef(self, node):
-        self.lprint(node.__class__.__name__)
+        self.lprint(node.__class__.__name__, node.coord)
 
         self.functions[node.decl.name] = self.visit_child(node.body)
 
@@ -293,6 +294,8 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         output += ' (IPSetup {}+ 3>+>+ 4<) {} [\n'.format(start_ip,
             bf_travel(IP_INDEX, STOP_INDICATOR_INDEX))
 
+        symbol_table = OrderedDict()
+
         for index in range(len(blocks_by_index)):
             block = blocks_by_index[index]
             print('%d: %s' % (index, block))
@@ -304,7 +307,10 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
             if isinstance(block, IfBlock):
                 for op in block.cond_block:
+                    start_bf_length = len(output)
                     output += op.to_bf(declaration_positions, len(declaration_positions))
+                    end_bf_length = len(output)
+                    symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
                 true_ip = ip_offset(block.index, block.true_blocks[0].index)
                 false_ip = None
@@ -334,7 +340,10 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
             else:
                 for op in block.ops:
+                    start_bf_length = len(output)
                     output += op.to_bf(declaration_positions, len(declaration_positions))
+                    end_bf_length = len(output)
+                    symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
                 if block.next is None:
                     output += ' !(EndProgram {}-{})'.format(
@@ -355,4 +364,4 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         output += ']\n'
 
         print()
-        return output
+        return output, symbol_table

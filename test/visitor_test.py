@@ -60,10 +60,10 @@ class VisitorTest(TestCase):
         brainfuck_compiler_visitor.visit(ast)
         code = brainfuck_compiler_visitor.to_bf()
 
-        runtime = BrainfuckRuntime(brainfuck_compiler_visitor.declarations)
-        runtime.execute(code)
+        # runtime = BrainfuckRuntime(brainfuck_compiler_visitor.declarations)
+        # runtime.execute(code)
 
-        # print(code)
+        print(code)
 
         self.assertEqual(['x', 'x_0', 'y', 'y_0', 'if', 'if_0', 'y_1', 'if_1', 'y_2'],
                          brainfuck_compiler_visitor.declarations)

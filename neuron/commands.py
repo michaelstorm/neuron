@@ -11,7 +11,7 @@ def bf_travel(from_pos, to_pos, opposite=False):
     return '{}{}'.format(distance, direction)
 
 
-class Move(namedtuple('Move', ['from_name', 'to_name'])):
+class Move(namedtuple('Move', ['coord', 'from_name', 'to_name'])):
     def to_bf(self, declaration_positions, stack_index):
         if isinstance(self.from_name, int):
             from_pos = self.from_name
@@ -29,7 +29,8 @@ class Move(namedtuple('Move', ['from_name', 'to_name'])):
         return '(Move {}[-{}+{}]{})'.format('{}>'.format(from_pos), travel_forward,
                                             travel_backward, '{}<'.format(from_pos))
 
-class Copy(namedtuple('Copy', ['from_name', 'to_name'])):
+
+class Copy(namedtuple('Copy', ['coord', 'from_name', 'to_name'])):
     def to_bf(self, declaration_positions, stack_index):
         start_pos = declaration_positions[self.from_name]
         end_pos = declaration_positions[self.to_name]
@@ -39,7 +40,7 @@ class Copy(namedtuple('Copy', ['from_name', 'to_name'])):
         staging_end_travel = bf_travel(staging_pos, end_pos)
         end_start_travel = bf_travel(end_pos, start_pos)
 
-        move_command = Move(from_name=staging_pos, to_name=self.from_name)
+        move_command = Move(coord=self.coord, from_name=staging_pos, to_name=self.from_name)
 
         return '(Copy {}[-{}+{}+{}]{}{})'.format('{}>'.format(start_pos),
                                                  start_staging_travel,
@@ -47,7 +48,8 @@ class Copy(namedtuple('Copy', ['from_name', 'to_name'])):
                                                  '{}<'.format(start_pos),
                                                  move_command.to_bf(declaration_positions, stack_index + 1))
 
-class SetValue(namedtuple('SetValue', ['name', 'value', 'type'])):
+
+class SetValue(namedtuple('SetValue', ['coord', 'name', 'value', 'type'])):
     def to_bf(self, declaration_positions, stack_index):
         pos = declaration_positions[self.name]
 
@@ -61,19 +63,22 @@ class SetValue(namedtuple('SetValue', ['name', 'value', 'type'])):
         return '(SetValue {}{}{})'.format('{}>'.format(pos), '{}+'.format(bf_value),
                                           '{}<'.format(pos))
 
-class Zero(namedtuple('Zero', ['name'])):
+
+class Zero(namedtuple('Zero', ['coord', 'name'])):
     def to_bf(self, declaration_positions, stack_index):
         pos = declaration_positions[self.name]
         return '(Zero {}[-]{})'.format('{}>'.format(pos), '{}<'.format(pos))
 
-class Add(namedtuple('Add', ['result_name', 'first_name', 'second_name'])):
+
+class Add(namedtuple('Add', ['coord', 'result_name', 'first_name', 'second_name'])):
     def to_bf(self, declaration_positions, stack_index):
         first_move = Move(from_name=self.first_name, to_name=self.result_name)
         second_move = Move(from_name=self.second_name, to_name=self.result_name)
         return '(Add {}{})'.format(first_move.to_bf(declaration_positions, stack_index + 1),
                                    second_move.to_bf(declaration_positions, stack_index + 1))
 
-class Multiply(namedtuple('Multiply', ['result_name', 'first_name', 'second_name'])):
+
+class Multiply(namedtuple('Multiply', ['coord', 'result_name', 'first_name', 'second_name'])):
     def to_bf(self, declaration_positions, stack_index):
         first_pos = declaration_positions[self.first_name]
         second_pos = declaration_positions[self.second_name]
@@ -86,13 +91,14 @@ class Multiply(namedtuple('Multiply', ['result_name', 'first_name', 'second_name
                                                  '{}>'.format(first_pos),
                                                  '{}<'.format(first_pos))
 
-class Print(namedtuple('Print', ['output_name'])):
+
+class Print(namedtuple('Print', ['coord', 'output_name'])):
     def to_bf(self, declaration_positions, stack_index):
         pos = declaration_positions[self.output_name]
         return '(Print !{}.{})'.format('{}>'.format(pos), '{}<'.format(pos))
 
 
-class Input(namedtuple('Input', ['input_name'])):
+class Input(namedtuple('Input', ['coord', 'input_name'])):
     def to_bf(self, declaration_positions, stack_index):
         pos = declaration_positions[self.input_name]
         return '(Input {},{})'.format('{}>'.format(pos), '{}<'.format(pos))
