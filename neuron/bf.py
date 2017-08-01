@@ -1,24 +1,23 @@
-from enum import Enum
+from .visitor import TapeIndices
 import re
 import sys
 
 
-class TextColor(Enum):
+class TextColor:
     DEFAULT = 39
     BLACK = 30
 
 
-class BackgroundColor(Enum):
+class BackgroundColor:
     DEFAULT = 49
-    BLUE = 44
     RED = 41
-    LIGHT_RED = 101
     LIGHT_GREEN = 102
     LIGHT_MAGENTA = 105
+    LIGHT_CYAN = 106
 
 
 def text_color_code(color):
-    return '\033[{}m'.format(color.value)
+    return '\033[{}m'.format(color)
 
 
 def colored_text(color, text):
@@ -48,10 +47,10 @@ class BrainfuckRuntime:
         source_line_index = None
         for bf_indices, coord in self.symbol_table.items():
             if op_start_index >= bf_indices[0] and op_start_index < bf_indices[1]:
-                source_line_index = int(re.match(r'.*:(\d+)', str(coord)).group(1))
+                source_line_index = int(re.match(r'.*:(\d+)', coord).group(1))
 
         for line_index, line in enumerate(self.source.strip().split('\n')):
-            if line_index == source_line_index:
+            if line_index + 1 == source_line_index:
                 print(colored_text_background(BackgroundColor.LIGHT_GREEN, TextColor.BLACK,
                                               line))
             else:
@@ -61,7 +60,7 @@ class BrainfuckRuntime:
 
         colored_code = "{}{}{}".format(
             code[:op_start_index],
-            colored_text_background(BackgroundColor.LIGHT_GREEN, TextColor.BLACK,
+            colored_text_background(BackgroundColor.LIGHT_CYAN, TextColor.BLACK,
                                     code[op_start_index:op_end_index+1]),
             code[op_end_index+1:])
 
@@ -69,7 +68,10 @@ class BrainfuckRuntime:
         code_lines = ('\n' + code_line_prefix).join(colored_code.split('\n'))
         print('{}: {}'.format(instr_count, code_lines))
 
-        tape_sections = [[0, 1], [2, 7], [8, len(self.tape) - 1]]
+        tape_sections = [[TapeIndices.START, TapeIndices.END_STOP_INDICATOR],
+                         [TapeIndices.START_IP_WORKSPACE, TapeIndices.END_IP_WORKSPACE],
+                         [TapeIndices.START_STACK, len(self.tape) - 1]]
+
         prefix = ' ' * len(str(instr_count)) + '  '
         colored_tape = ''
         for (value_index, value) in enumerate(self.tape):
@@ -97,7 +99,7 @@ class BrainfuckRuntime:
         reversed_declarations = {value: key for (key, value) in declaration_positions.items()}
         for position in sorted(reversed_declarations.keys()):
             padded_name = (reversed_declarations[position] + ':').ljust(max_declaration_length+2)
-            tape_position = 8 + position
+            tape_position = TapeIndices.START_STACK + position
             value = self.tape[tape_position]
             if self.pointer == tape_position:
                 value = colored_text_background(BackgroundColor.LIGHT_MAGENTA, TextColor.BLACK, value)
@@ -119,6 +121,9 @@ class BrainfuckRuntime:
         skip_breakpoints = False
 
         while index < len(code):
+            if self.pointer < 0:
+                raise Exception("Bad tape pointer: {}".format(self.pointer))
+
             op = code[index]
 
             if op == '!' and not skip_breakpoints:

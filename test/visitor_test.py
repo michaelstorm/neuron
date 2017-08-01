@@ -58,7 +58,7 @@ class VisitorTest(TestCase):
 
         brainfuck_compiler_visitor = BrainfuckCompilerVisitor()
         brainfuck_compiler_visitor.visit(ast)
-        code = brainfuck_compiler_visitor.to_bf()
+        code, symbol_table = brainfuck_compiler_visitor.to_bf()
 
         # runtime = BrainfuckRuntime(brainfuck_compiler_visitor.declarations)
         # runtime.execute(code)
@@ -69,6 +69,10 @@ class VisitorTest(TestCase):
                          brainfuck_compiler_visitor.declarations)
 
         main = brainfuck_compiler_visitor.functions['main']
+        print('MAIN', main[0])
+        print('MAIN', main[1])
+        print('MAIN', main[2])
+
         self.assertEqual(1, len(main))
         self.assertEqual(0, main[0].index)
         self.assertIsNone(main[0].next)
