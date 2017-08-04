@@ -46,7 +46,7 @@ class BrainfuckRuntime:
     def print_state(self, instr_count, op_start_index, op_end_index, code):
         source_line_index = None
         for bf_indices, coord in self.symbol_table.items():
-            if op_start_index >= bf_indices[0] and op_start_index < bf_indices[1]:
+            if coord is not None and op_start_index >= bf_indices[0] and op_start_index < bf_indices[1]:
                 source_line_index = int(re.match(r'.*:(\d+)', coord).group(1))
 
         for line_index, line in enumerate(self.source.strip().split('\n')):
@@ -95,7 +95,8 @@ class BrainfuckRuntime:
                                  for (index, decl_name)
                                  in enumerate(self.declarations)}
 
-        max_declaration_length = max([len(name) for name in declaration_positions])
+        # [0] prevents an empty declaration_positions from causing max() to raise error
+        max_declaration_length = max([0] + [len(name) for name in declaration_positions])
         reversed_declarations = {value: key for (key, value) in declaration_positions.items()}
         for position in sorted(reversed_declarations.keys()):
             padded_name = (reversed_declarations[position] + ':').ljust(max_declaration_length+2)

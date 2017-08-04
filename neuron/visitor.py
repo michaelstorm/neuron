@@ -3,21 +3,7 @@ from pycparser import c_parser, c_ast, parse_file
 
 from .commands import *
 from .ordered_set import OrderedSet
-
-
-class TapeIndices:
-    START = 0
-    FIRST_KNOWN_ZERO = START
-    STOP_INDICATOR_INDEX = FIRST_KNOWN_ZERO + 1
-    KNOWN_ZERO = STOP_INDICATOR_INDEX + 1
-    END_STOP_INDICATOR = STOP_INDICATOR_INDEX + 1
-
-    START_IP_WORKSPACE = KNOWN_ZERO + 1
-    IP_INDEX = START_IP_WORKSPACE
-    IP_ZERO_INDICATOR = IP_INDEX + 1
-    END_IP_WORKSPACE = IP_ZERO_INDICATOR + 4
-
-    START_STACK = END_IP_WORKSPACE + 1
+from .tape_indices import TapeIndices
 
 
 class Block:
@@ -28,6 +14,14 @@ class Block:
 
     def __repr__(self):
         return 'Block(index=%s, ops=%s, next=%s)' % (self.index, self.ops.__repr__(), self.next_index)
+
+
+class EndBlock(Block):
+    def __init__(self, index):
+        super().__init__(index, [EndProgram()])
+
+    def __repr__(self):
+        return 'EndBlock(index=%s, ops=%s, next=%s)' % (self.index, self.ops.__repr__(), self.next_index)
 
 
 class IfBlock:
@@ -104,16 +98,23 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.lprint(node.__class__.__name__)
         return self.visit_children(node)
 
-    def create_block(self, ops=[]):
-        block = Block(self.next_block_index, ops)
+    def add_block(self, block):
         self.blocks_by_index[block.index] = block
         self.next_block_index += 1
+
+    def create_block(self, ops=[]):
+        block = Block(self.next_block_index, ops)
+        self.add_block(block)
+        return block
+
+    def create_end_block(self):
+        block = EndBlock(self.next_block_index)
+        self.add_block(block)
         return block
 
     def create_if_block(self, **if_kwargs):
         block = IfBlock(self.next_block_index, **if_kwargs)
-        self.blocks_by_index[block.index] = block
-        self.next_block_index += 1
+        self.add_block(block)
         return block
 
     def push_decl_mod(self, decl_name):
@@ -171,9 +172,10 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         for result in results:
             if isinstance(result, IfBlock):
                 next_block = self.create_block()
+
                 self.blocks_by_index[result.true_blocks[-1]].next_index = next_block.index
-                if len(result.false_blocks) > 0:
-                    self.blocks_by_index[result.false_blocks[-1]].next_index = next_block.index
+                self.blocks_by_index[result.false_blocks[-1]].next_index = next_block.index
+
                 blocks[-1].next_index = result.index
                 blocks.append(result)
                 blocks.append(next_block)
@@ -218,7 +220,10 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.pop_decl()
 
         true_blocks = [block.index for block in self.visit_child(node.iftrue)]
-        false_blocks = [block.index for block in (self.visit_child(node.iffalse) if node.iffalse else [])]
+        if node.iffalse:
+            false_blocks = [block.index for block in self.visit_child(node.iffalse)]
+        else:
+            false_blocks = [self.create_block().index]
 
         if_block = self.create_if_block(
             decl_name = decl_name,
@@ -278,6 +283,12 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                                  for (index, decl_name)
                                  in enumerate(self.declarations)}
 
+        end_block = self.create_end_block()
+
+        for block in self.blocks_by_index.values():
+            if isinstance(block, Block) and not isinstance(block, EndBlock) and block.next_index is None:
+                block.next_index = end_block.index
+
         print('blocks_by_index:')
         for index in range(len(self.blocks_by_index)):
             block = self.blocks_by_index[index]
@@ -289,10 +300,14 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             for block_index in block_indexes:
                 block = self.blocks_by_index[block_index]
 
-                if isinstance(block, IfBlock):
+                if isinstance(block, EndBlock):
+                    blocks_to_terminal_blocks[block.index] = block.index
+
+                elif isinstance(block, IfBlock):
                     blocks_to_terminal_blocks[block.index] = block.index
                     find_terminal_blocks(block.true_blocks)
                     find_terminal_blocks(block.false_blocks)
+
                 else:
                     if len(block.ops) == 0:
                         blocks_to_terminal_blocks[block.index] = block.next_index
@@ -362,7 +377,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         def ip_offset(current_index, new_index):
             return ((new_index - current_index) % len(new_blocks_by_index)) - 1
 
-        start_ip = main_blocks[0].index
+        start_ip = blocks_to_new_blocks.get(main_blocks[0].index)
         output = ''
 
         output += '!{}+{}'.format(
@@ -405,9 +420,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                     symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
                 true_ip = ip_offset(block.index, block.true_blocks[0])
-                false_ip = None
-                if len(block.false_blocks) > 0:
-                    false_ip = ip_offset(block.index, block.false_blocks[0])
+                false_ip = ip_offset(block.index, block.false_blocks[0])
 
                 cond_result_pos = TapeIndices.START_STACK + declaration_positions[block.decl_name]
 
@@ -437,11 +450,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                     end_bf_length = len(output)
                     symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
-                if block.next_index is None:
-                    output += ' !(EndProgram {}-{})'.format(
-                        bf_travel(TapeIndices.START_STACK, TapeIndices.STOP_INDICATOR_INDEX),
-                        bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.START_STACK))
-                else:
+                if block.next_index is not None:
                     new_ip = ip_offset(block.index, block.next_index)
                     output += ' !(NextBlock {}{}+{})'.format(
                         bf_travel(TapeIndices.START_STACK, TapeIndices.IP_INDEX),
