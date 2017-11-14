@@ -1,5 +1,5 @@
 from neuron.bf import BrainfuckRuntime
-from neuron.visitor import BrainfuckCompilerVisitor
+from neuron.visitor import BrainfuckCompilerVisitor, EndBlock
 from neuron.commands import *
 
 from pycparser import c_parser
@@ -20,22 +20,20 @@ class VisitorTest(TestCase):
 
         brainfuck_compiler_visitor = BrainfuckCompilerVisitor()
         brainfuck_compiler_visitor.visit(ast)
-        code = brainfuck_compiler_visitor.to_bf()
+        code, _, blocks = brainfuck_compiler_visitor.to_bf()
 
-        print(code)
-
-        self.assertEqual(['x', 'x_0'], brainfuck_compiler_visitor.declarations)
+        self.assertEqual(['x', 'x_0', 'y'], brainfuck_compiler_visitor.declarations)
 
         main = brainfuck_compiler_visitor.functions['main']
-        self.assertEqual(1, len(main))
         self.assertEqual(0, main[0].index)
-        self.assertIsNone(main[0].next)
 
-        self.assertEqual(SetValue(name='x_0', value='2', type='int'), main[0].ops[0])
-        self.assertEqual(Zero(name='x'), main[0].ops[1])
-        self.assertEqual(Move(from_name='x_0', to_name='x'), main[0].ops[2])
+        self.assertEqual(2, len(blocks))
+        end_block = blocks[main[0].next_index]
+        self.assertEqual(EndBlock, type(end_block))
 
-        raise Exception()
+        self.assertEqual(SetValue(name='x_0', value='2', type='int', coord=':4'), main[0].ops[0])
+        self.assertEqual(Zero(name='x', coord=':4'), main[0].ops[1])
+        self.assertEqual(Move(from_name='x_0', to_name='x', coord=':4'), main[0].ops[2])
 
     def if_test(self):
         source = """
@@ -58,12 +56,13 @@ class VisitorTest(TestCase):
 
         brainfuck_compiler_visitor = BrainfuckCompilerVisitor()
         brainfuck_compiler_visitor.visit(ast)
-        code, symbol_table = brainfuck_compiler_visitor.to_bf()
+        code, symbol_table, _ = brainfuck_compiler_visitor.to_bf()
 
-        # runtime = BrainfuckRuntime(brainfuck_compiler_visitor.declarations)
-        # runtime.execute(code)
+        runtime = BrainfuckRuntime(brainfuck_compiler_visitor.declarations, source, symbol_table)
+        runtime.execute(code)
 
         print(code)
+        print(runtime.get_declaration_value('y'))
 
         self.assertEqual(['x', 'x_0', 'y', 'y_0', 'if', 'if_0', 'y_1', 'if_1', 'y_2'],
                          brainfuck_compiler_visitor.declarations)
@@ -73,7 +72,6 @@ class VisitorTest(TestCase):
         print('MAIN', main[1])
         print('MAIN', main[2])
 
-        self.assertEqual(1, len(main))
         self.assertEqual(0, main[0].index)
         self.assertIsNone(main[0].next)
 

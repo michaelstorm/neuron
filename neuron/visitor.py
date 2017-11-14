@@ -1,5 +1,6 @@
 from collections import namedtuple, OrderedDict
 from pycparser import c_parser, c_ast, parse_file
+import sys
 
 from .commands import *
 from .ordered_set import OrderedSet
@@ -12,6 +13,13 @@ class Block:
         self.ops = list(ops)
         self.next_index = None
 
+    def pretty_print(self):
+        ret = ['Block(index=%s, next=%s):' % (self.index, self.next_index)]
+        if len(self.ops) > 0:
+            for op in self.ops:
+                ret += ['    ' + op.__repr__()]
+        return '\n'.join(ret)
+
     def __repr__(self):
         return 'Block(index=%s, ops=%s, next=%s)' % (self.index, self.ops.__repr__(), self.next_index)
 
@@ -19,6 +27,9 @@ class Block:
 class EndBlock(Block):
     def __init__(self, index):
         super().__init__(index, [EndProgram()])
+
+    def pretty_print(self):
+        return 'EndBlock(index=%s, next=%s)' % (self.index, self.next_index)
 
     def __repr__(self):
         return 'EndBlock(index=%s, ops=%s, next=%s)' % (self.index, self.ops.__repr__(), self.next_index)
@@ -31,6 +42,17 @@ class IfBlock:
         self.true_blocks = true_blocks
         self.false_blocks = false_blocks
         self.decl_name = decl_name
+
+    def pretty_print(self):
+        ret = ['IfBlock(index={}, decl_name={}):'.format(self.index, self.decl_name)]
+        ret += ['    Cond block:']
+        for op in self.cond_block:
+            ret += ['        ' + op.__repr__()]
+        if len(self.true_blocks) > 0:
+            ret += ['    True blocks: {}'.format(self.true_blocks)]
+        if len(self.false_blocks) > 0:
+            ret += ['    False blocks: {}'.format(self.false_blocks)]
+        return '\n'.join(ret)
 
     def __str__(self):
         return "IfBlock(index={}, decl_name={}, true_blocks={}, false_blocks={}, cond_block={})".format(
@@ -166,9 +188,9 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
     def visit_Compound(self, node):
         self.lprint(node.__class__.__name__, node.coord)
 
+        blocks = [self.create_block()]
         results = self.visit_children(node)
 
-        blocks = [self.create_block()]
         for result in results:
             if isinstance(result, IfBlock):
                 next_block = self.create_block()
@@ -377,10 +399,15 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         def ip_offset(current_index, new_index):
             return ((new_index - current_index) % len(new_blocks_by_index)) - 1
 
-        start_ip = blocks_to_new_blocks.get(main_blocks[0].index)
-        output = ''
+        print('main_blocks:')
+        for block in main_blocks:
+            print(block.pretty_print())
+            print()
 
-        output += '!{}+{}'.format(
+        start_ip = blocks_to_new_blocks.get(main_blocks[0].index)
+        print('start_ip', start_ip)
+
+        output = '!{}+{}'.format(
             bf_travel(TapeIndices.START, TapeIndices.STOP_INDICATOR_INDEX),
             bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.IP_INDEX))
 
@@ -392,15 +419,18 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         print('new_blocks_by_index:')
         for block_index, block in new_blocks_by_index.items():
-            print('%d: %s' % (block_index, block))
+            print('%d: %s\n' % (block_index, block.pretty_print()))
 
             start_bf_length = len(output)
-            output += '    !{} [{} (IPCheck >+< [->->]3>[>] {}) !(Block [-{}'.format(
+            output += '    !{} [{} (IPCheck >+< [->->]3>[>] {})'.format(
                 bf_travel(TapeIndices.FIRST_KNOWN_ZERO, TapeIndices.STOP_INDICATOR_INDEX),
                 bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.IP_INDEX),
-                bf_travel(TapeIndices.END_IP_WORKSPACE, TapeIndices.IP_ZERO_INDICATOR),
+                bf_travel(TapeIndices.END_IP_WORKSPACE, TapeIndices.IP_ZERO_INDICATOR))
+            output += '\n        !(Block [-{}'.format(
                 bf_travel(TapeIndices.IP_ZERO_INDICATOR, TapeIndices.START_STACK))
             end_bf_length = len(output)
+
+            output += '\n            '
 
             if isinstance(block, IfBlock):
                 coord = block.cond_block[0].coord
@@ -430,7 +460,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                         new_ip,
                         bf_travel(TapeIndices.IP_INDEX, cond_result_pos))
 
-                output += ' !{}{} (GoToTrue [[-]{}{}])'.format(
+                output += '\n            (GoToTrue !{}{} [[-]{}{}])'.format(
                     bf_travel(TapeIndices.START_STACK, cond_result_pos),
                     '>+<' if false_ip is not None else '',
                     bf_set_ip(true_ip),
@@ -438,7 +468,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                     bf_travel(cond_result_pos, TapeIndices.START_STACK))
 
                 if false_ip is not None:
-                    output += ' (GoToFalse >[-<{}>]<)'.format(
+                    output += '\n            (GoToFalse >[-<{}>]<)'.format(
                         bf_set_ip(false_ip))
 
                 output += ' {}'.format(bf_travel(cond_result_pos, TapeIndices.START_STACK))
@@ -457,12 +487,15 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                         new_ip,
                         bf_travel(TapeIndices.IP_INDEX, TapeIndices.START_STACK))
 
-            output += ' {}]) {}] <[<]\n'.format(
+            output += '\n        {}]) {}] <[<]\n'.format(
                 bf_travel(TapeIndices.START_STACK, TapeIndices.IP_ZERO_INDICATOR),
                 bf_travel(TapeIndices.IP_ZERO_INDICATOR, TapeIndices.KNOWN_ZERO))
+
+            if block_index < len(new_blocks_by_index) - 1:
+                output += '\n'
 
         output += '{}]\n'.format(
             bf_travel(TapeIndices.FIRST_KNOWN_ZERO, TapeIndices.STOP_INDICATOR_INDEX))
 
         print()
-        return output, symbol_table
+        return output, symbol_table, new_blocks_by_index

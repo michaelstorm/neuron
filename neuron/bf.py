@@ -39,15 +39,19 @@ class BrainfuckRuntime:
         self.tape = [0] * 32
         self.pointer = 0
         self.output = ''
-        self.declarations = declarations
         self.source = source
         self.symbol_table = symbol_table
+        self.declaration_positions = {decl_name: index
+                                      for (index, decl_name)
+                                      in enumerate(declarations)}
 
     def print_state(self, instr_count, op_start_index, op_end_index, code):
         source_line_index = None
         for bf_indices, coord in self.symbol_table.items():
             if coord is not None and op_start_index >= bf_indices[0] and op_start_index < bf_indices[1]:
-                source_line_index = int(re.match(r'.*:(\d+):.*', coord).group(1))
+                match = re.match(r'.*:(\d+):.*', coord)
+                if match:
+                    source_line_index = int(match.group(1))
 
         for line_index, line in enumerate(self.source.strip().split('\n')):
             if line_index + 1 == source_line_index:
@@ -91,13 +95,9 @@ class BrainfuckRuntime:
 
         print('{}{}{}\n'.format(prefix, '({}) '.format(self.pointer).ljust(5), colored_tape))
 
-        declaration_positions = {decl_name: index
-                                 for (index, decl_name)
-                                 in enumerate(self.declarations)}
-
         # [0] prevents an empty declaration_positions from causing max() to raise error
-        max_declaration_length = max([0] + [len(name) for name in declaration_positions])
-        reversed_declarations = {value: key for (key, value) in declaration_positions.items()}
+        max_declaration_length = max([0] + [len(name) for name in self.declaration_positions])
+        reversed_declarations = {value: key for (key, value) in self.declaration_positions.items()}
         for position in sorted(reversed_declarations.keys()):
             padded_name = (reversed_declarations[position] + ':').ljust(max_declaration_length+2)
             tape_position = TapeIndices.START_STACK + position
@@ -110,6 +110,11 @@ class BrainfuckRuntime:
         if len(self.output) > 0:
             text = colored_text_background(BackgroundColor.RED, TextColor.DEFAULT, self.output)
             print(text + '\n')
+
+    def get_declaration_value(self, declaration_name):
+        position = self.declaration_positions[declaration_name]
+        tape_position = TapeIndices.START_STACK + position
+        return self.tape[tape_position]
 
     def execute(self, code):
         index = 0
