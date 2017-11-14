@@ -47,7 +47,7 @@ class BrainfuckRuntime:
         source_line_index = None
         for bf_indices, coord in self.symbol_table.items():
             if coord is not None and op_start_index >= bf_indices[0] and op_start_index < bf_indices[1]:
-                source_line_index = int(re.match(r'.*:(\d+)', coord).group(1))
+                source_line_index = int(re.match(r'.*:(\d+):.*', coord).group(1))
 
         for line_index, line in enumerate(self.source.strip().split('\n')):
             if line_index + 1 == source_line_index:
