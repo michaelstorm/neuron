@@ -116,7 +116,7 @@ class BrainfuckRuntime:
         tape_position = TapeIndices.START_STACK + position
         return self.tape[tape_position]
 
-    def execute(self, code):
+    def execute(self, code, debug=False):
         index = 0
         instr_count = 0
         last_op = None
@@ -124,7 +124,7 @@ class BrainfuckRuntime:
         number = None
         op_start_index = 0
         previous_input_line = 'c'
-        skip_breakpoints = False
+        skip_breakpoints = not debug
 
         while index < len(code):
             if self.pointer < 0:
@@ -144,7 +144,9 @@ class BrainfuckRuntime:
 
             elif op in ('+', '-', '>', '<', '.', ',', '[', ']'):
                 if op != last_op:
-                    self.print_state(instr_count, op_start_index, index, code)
+                    if debug:
+                        self.print_state(instr_count, op_start_index, index, code)
+
                     if step_through:
                         line = input()
                         if len(line) == 0:
@@ -217,4 +219,5 @@ class BrainfuckRuntime:
             last_op = op
             index += 1
 
-        self.print_state(instr_count, op_start_index, index, code)
+        if debug:
+            self.print_state(instr_count, op_start_index, index, code)

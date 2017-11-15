@@ -17,4 +17,4 @@ if __name__ == "__main__":
     code, symbol_table, _ = brainfuck_compiler_visitor.to_bf()
 
     runtime = BrainfuckRuntime(brainfuck_compiler_visitor.declarations, source, symbol_table)
-    runtime.execute(code)
+    runtime.execute(code, debug=True)

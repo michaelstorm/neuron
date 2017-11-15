@@ -56,27 +56,13 @@ class VisitorTest(TestCase):
 
         brainfuck_compiler_visitor = BrainfuckCompilerVisitor()
         brainfuck_compiler_visitor.visit(ast)
-        code, symbol_table, _ = brainfuck_compiler_visitor.to_bf()
+        code, symbol_table, blocks = brainfuck_compiler_visitor.to_bf()
 
         runtime = BrainfuckRuntime(brainfuck_compiler_visitor.declarations, source, symbol_table)
         runtime.execute(code)
 
-        print(code)
-        print(runtime.get_declaration_value('y'))
-
         self.assertEqual(['x', 'x_0', 'y', 'y_0', 'if', 'if_0', 'y_1', 'if_1', 'y_2'],
                          brainfuck_compiler_visitor.declarations)
 
-        main = brainfuck_compiler_visitor.functions['main']
-        print('MAIN', main[0])
-        print('MAIN', main[1])
-        print('MAIN', main[2])
-
-        self.assertEqual(0, main[0].index)
-        self.assertIsNone(main[0].next)
-
-        self.assertEqual(SetValue(name='x_0', value='2', type='int'), main[0].ops[0])
-        self.assertEqual(Zero(name='x'), main[0].ops[1])
-        self.assertEqual(Move(from_name='x_0', to_name='x'), main[0].ops[2])
-
-        raise Exception()
+        self.assertEqual(2, runtime.get_declaration_value('x'))
+        self.assertEqual(3, runtime.get_declaration_value('y'))
