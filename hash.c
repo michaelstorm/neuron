@@ -1,13 +1,13 @@
 int main()
 {
-    int x = 2;
     int y;
-    if (x) {
+    if (0) {
         y = 1;
     }
-    else {
-        if (x) {
-            y = 3;
-        }
+    else if (0) {
+        y = 3;
+    }
+    else if (2) {
+        y = 4;
     }
 }
