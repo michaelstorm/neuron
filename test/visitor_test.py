@@ -82,9 +82,55 @@ class VisitorTest(TestCase):
             else if (0) {
                 y = 3;
             }
+            else {
+                y = 4;
+            }
         }
         """
 
-        code, symbol_table, blocks, visitor, runtime = self.execute_code(source)
-
+        *_, runtime = self.execute_code(source)
         self.assertEqual(1, runtime.get_declaration_value('y'))
+
+        source = """
+        int main()
+        {
+            int y;
+            if (0) {
+                y = 1;
+            }
+            else if (1) {
+                y = 2;
+            }
+            else if (0) {
+                y = 3;
+            }
+            else {
+                y = 4;
+            }
+        }
+        """
+
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(2, runtime.get_declaration_value('y'))
+
+        source = """
+        int main()
+        {
+            int y;
+            if (0) {
+                y = 1;
+            }
+            else if (0) {
+                y = 2;
+            }
+            else if (0) {
+                y = 3;
+            }
+            else {
+                y = 4;
+            }
+        }
+        """
+
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(4, runtime.get_declaration_value('y'))
