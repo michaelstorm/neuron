@@ -11,3 +11,9 @@ class TapeIndices:
     END_IP_WORKSPACE = IP_ZERO_INDICATOR + 4
 
     START_STACK = END_IP_WORKSPACE + 1
+
+    @classmethod
+    def get_names(cls, index):
+        m = cls.__dict__
+        r = {v: [k for k in m if m[k] == v and type(v) == int] for v in m.values()}
+        return r.get(index, [])

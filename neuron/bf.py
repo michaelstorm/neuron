@@ -95,16 +95,21 @@ class BrainfuckRuntime:
 
         print('{}{}{}\n'.format(prefix, '({}) '.format(self.pointer).ljust(5), colored_tape))
 
-        # [0] prevents an empty declaration_positions from causing max() to raise error
+        print('{}{}\n'.format(' ' * len(prefix), '/'.join(sorted(TapeIndices.get_names(self.pointer)))))
+
+        # [0] prevents an empty declaration_position from causing max() to raise error
         max_declaration_length = max([0] + [len(name) for name in self.declaration_positions])
         reversed_declarations = {value: key for (key, value) in self.declaration_positions.items()}
+
         for position in sorted(reversed_declarations.keys()):
             padded_name = (reversed_declarations[position] + ':').ljust(max_declaration_length+2)
             tape_position = TapeIndices.START_STACK + position
             value = self.tape[tape_position]
+            line = '[{}] {}{}'.format(position, padded_name, value)
             if self.pointer == tape_position:
-                value = colored_text_background(BackgroundColor.LIGHT_MAGENTA, TextColor.BLACK, value)
-            print('[{}] {}{}'.format(position, padded_name, value))
+                line = colored_text_background(BackgroundColor.LIGHT_MAGENTA, TextColor.BLACK, line)
+            print(line)
+
         print()
 
         if len(self.output) > 0:
