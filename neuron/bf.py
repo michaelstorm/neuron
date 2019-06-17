@@ -124,6 +124,8 @@ class BrainfuckRuntime:
         print()
 
         self.print_bf(instr_count, op_start_index, op_end_index, code)
+        print()
+
         self.print_tape(instr_count)
         self.print_variables()
         print()

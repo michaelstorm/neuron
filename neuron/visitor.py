@@ -213,7 +213,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.aprint('type', node.type)
 
         if node.type == 'string':
-            value = len(self.static_data)
+            value = sum(len(d) for d in self.static_data) + len(self.static_data)
             self.static_data.append(node.value[1:-1])
         else:
             value = node.value
@@ -431,14 +431,14 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             print()
 
         print('static_data:', self.static_data)
-        output = '!(StaticSetup {} '.format(bf_travel(TapeIndices.START, TapeIndices.START_STATIC_SEGMENT))
+        output = '(StaticSetup !{} '.format(bf_travel(TapeIndices.START, TapeIndices.START_STATIC_SEGMENT))
         for data_index, data in enumerate(self.static_data):
             for c in data:
                 output += '>>{}+>'.format(str(ord(c)))
-            output += '>>>' # zero byte
+            output += '>>> ' # zero byte
         static_segment_size = 3 * (sum([len(data) for data in self.static_data]) + len(self.static_data))
         output += '{}<'.format(static_segment_size)
-        output += '{})\n'.format(bf_travel(TapeIndices.START_STATIC_SEGMENT, TapeIndices.START))
+        output += '{})'.format(bf_travel(TapeIndices.START_STATIC_SEGMENT, TapeIndices.START))
 
         start_ip = blocks_to_new_blocks.get(main_blocks[0].index)
         print('start_ip', start_ip)
@@ -447,7 +447,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             bf_travel(TapeIndices.START, TapeIndices.STOP_INDICATOR_INDEX),
             bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.IP_INDEX))
 
-        output += ' (IPSetup {}+ 3>+>+ 4<) {} [{}\n'.format(start_ip,
+        output += '(IPSetup {}+ 3>+>+ 4<){} [{}'.format(start_ip,
             bf_travel(TapeIndices.IP_INDEX, TapeIndices.STOP_INDICATOR_INDEX),
             bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.FIRST_KNOWN_ZERO))
 
@@ -455,18 +455,16 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         print('new_blocks_by_index:')
         for block_index, block in new_blocks_by_index.items():
-            print('%d: %s\n' % (block_index, block.pretty_print()))
+            print('%d: %s' % (block_index, block.pretty_print()))
 
             start_bf_length = len(output)
-            output += '    !{} [{} (IPCheck >+< [->->]3>[>] {})'.format(
+            output += '!{} [{} (IPCheck >+< [->->]3>[>] {})'.format(
                 bf_travel(TapeIndices.FIRST_KNOWN_ZERO, TapeIndices.STOP_INDICATOR_INDEX),
                 bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.IP_INDEX),
                 bf_travel(TapeIndices.END_IP_WORKSPACE, TapeIndices.IP_ZERO_INDICATOR))
-            output += '\n        !(Block [-{}'.format(
+            output += '(Block ![-{}'.format(
                 bf_travel(TapeIndices.IP_ZERO_INDICATOR, TapeIndices.START_STACK))
             end_bf_length = len(output)
-
-            output += '\n            '
 
             if isinstance(block, IfBlock):
                 coord = block.cond_block[0].coord
@@ -496,7 +494,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                         new_ip,
                         bf_travel(TapeIndices.IP_INDEX, cond_result_pos))
 
-                output += '\n            (GoToTrue !{}{} [[-]{}{}])'.format(
+                output += '(GoToTrue !{}{} [[-]{}{}])'.format(
                     bf_travel(TapeIndices.START_STACK, cond_result_pos),
                     '>+<' if false_ip is not None else '',
                     bf_set_ip(true_ip),
@@ -504,7 +502,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                     bf_travel(cond_result_pos, TapeIndices.START_STACK))
 
                 if false_ip is not None:
-                    output += '\n            (GoToFalse >[-<{}>]<)'.format(
+                    output += '(GoToFalse >[-<{}>]<)'.format(
                         bf_set_ip(false_ip))
 
                 output += ' {}'.format(bf_travel(cond_result_pos, TapeIndices.START_STACK))
@@ -518,19 +516,16 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
                 if block.next_index is not None:
                     new_ip = ip_offset(block.index, block.next_index)
-                    output += ' !(NextBlock {}{}+{})'.format(
+                    output += '(NextBlock !{}{}+{})'.format(
                         bf_travel(TapeIndices.START_STACK, TapeIndices.IP_INDEX),
                         new_ip,
                         bf_travel(TapeIndices.IP_INDEX, TapeIndices.START_STACK))
 
-            output += '\n        {}]) {}] <[<]\n'.format(
+            output += '{}]){}] <[<]'.format(
                 bf_travel(TapeIndices.START_STACK, TapeIndices.IP_ZERO_INDICATOR),
                 bf_travel(TapeIndices.IP_ZERO_INDICATOR, TapeIndices.KNOWN_ZERO))
 
-            if block_index < len(new_blocks_by_index) - 1:
-                output += '\n'
-
-        output += '{}]\n'.format(
+        output += '{}]'.format(
             bf_travel(TapeIndices.FIRST_KNOWN_ZERO, TapeIndices.STOP_INDICATOR_INDEX))
 
         print()

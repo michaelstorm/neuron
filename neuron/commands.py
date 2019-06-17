@@ -122,6 +122,6 @@ class EndProgram(namedtuple('EndProgram', [])):
         return None
 
     def to_bf(self, declaration_positions, stack_index):
-        return ' !(EndProgram {}-{})'.format(
+        return '(EndProgram !{}-{})'.format(
             bf_travel(TapeIndices.START_STACK, TapeIndices.STOP_INDICATOR_INDEX),
             bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.START_STACK))
