@@ -1,4 +1,5 @@
 from .visitor import TapeIndices
+from pprint import pprint
 import re
 import sys
 
@@ -35,21 +36,22 @@ def colored_text_background(background_color, text_color, text):
 
 
 class BrainfuckRuntime:
-    def __init__(self, declarations, source, symbol_table):
+    def __init__(self, declarations, source, static_data, symbol_table):
         self.tape = [0] * 32
         self.pointer = 0
         self.output = ''
         self.source = source
+        self.static_data = static_data
         self.symbol_table = symbol_table
         self.declaration_positions = {decl_name: index
                                       for (index, decl_name)
                                       in enumerate(declarations)}
 
-    def print_state(self, instr_count, op_start_index, op_end_index, code):
+    def print_source(self, op_start_index):
         source_line_index = None
         for bf_indices, coord in self.symbol_table.items():
             if coord is not None and op_start_index >= bf_indices[0] and op_start_index < bf_indices[1]:
-                match = re.match(r'.*:(\d+):.*', coord)
+                match = re.match(r'.*:(\d+)', coord)
                 if match:
                     source_line_index = int(match.group(1))
 
@@ -60,8 +62,7 @@ class BrainfuckRuntime:
             else:
                 print(line)
 
-        print()
-
+    def print_bf(self, instr_count, op_start_index, op_end_index, code):
         colored_code = "{}{}{}".format(
             code[:op_start_index],
             colored_text_background(BackgroundColor.LIGHT_CYAN, TextColor.BLACK,
@@ -72,9 +73,11 @@ class BrainfuckRuntime:
         code_lines = ('\n' + code_line_prefix).join(colored_code.split('\n'))
         print('{}: {}'.format(instr_count, code_lines))
 
+    def print_tape(self, instr_count):
         tape_sections = [[TapeIndices.START, TapeIndices.END_STOP_INDICATOR],
                          [TapeIndices.START_IP_WORKSPACE, TapeIndices.END_IP_WORKSPACE],
-                         [TapeIndices.START_STACK, len(self.tape) - 1]]
+                         [TapeIndices.START_STACK, TapeIndices.END_STACK],
+                         [TapeIndices.START_STATIC_SEGMENT, len(self.tape) - 1]]
 
         prefix = ' ' * len(str(instr_count)) + '  '
         colored_tape = ''
@@ -97,6 +100,7 @@ class BrainfuckRuntime:
 
         print('{}{}\n'.format(' ' * len(prefix), '/'.join(sorted(TapeIndices.get_names(self.pointer)))))
 
+    def print_variables(self):
         # [0] prevents an empty declaration_position from causing max() to raise error
         max_declaration_length = max([0] + [len(name) for name in self.declaration_positions])
         reversed_declarations = {value: key for (key, value) in self.declaration_positions.items()}
@@ -110,11 +114,21 @@ class BrainfuckRuntime:
                 line = colored_text_background(BackgroundColor.LIGHT_MAGENTA, TextColor.BLACK, line)
             print(line)
 
-        print()
-
+    def print_output(self):
         if len(self.output) > 0:
             text = colored_text_background(BackgroundColor.RED, TextColor.DEFAULT, self.output)
             print(text + '\n')
+
+    def print_state(self, instr_count, op_start_index, op_end_index, code):
+        self.print_source(op_start_index)
+        print()
+
+        self.print_bf(instr_count, op_start_index, op_end_index, code)
+        self.print_tape(instr_count)
+        self.print_variables()
+        print()
+
+        self.print_output()
 
     def get_declaration_value(self, declaration_name):
         position = self.declaration_positions[declaration_name]
@@ -176,6 +190,8 @@ class BrainfuckRuntime:
                         self.tape[self.pointer] -= 1
                     elif op == '>':
                         self.pointer += 1
+                        if self.pointer == len(self.tape):
+                            self.tape.append(0)
                     elif op == '<':
                         self.pointer -= 1
 

@@ -33,8 +33,16 @@ class Move(namedtuple('Move', ['coord', 'from_name', 'to_name'])):
 
 class Copy(namedtuple('Copy', ['coord', 'from_name', 'to_name'])):
     def to_bf(self, declaration_positions, stack_index):
-        start_pos = declaration_positions[self.from_name]
-        end_pos = declaration_positions[self.to_name]
+        if isinstance(self.from_name, int):
+            start_pos = self.from_name
+        else:
+            start_pos = declaration_positions[self.from_name]
+
+        if isinstance(self.to_name, int):
+            end_pos = self.to_name
+        else:
+            end_pos = declaration_positions[self.to_name]
+
         staging_pos = stack_index
 
         start_staging_travel = bf_travel(start_pos, staging_pos)
@@ -52,7 +60,7 @@ class SetValue(namedtuple('SetValue', ['coord', 'name', 'value', 'type'])):
     def to_bf(self, declaration_positions, stack_index):
         pos = declaration_positions[self.name]
 
-        if self.type == 'int':
+        if self.type in ('int', 'string'):
             bf_value = self.value
         elif self.type == 'char':
             bf_value = ord(self.value[1])
@@ -93,6 +101,13 @@ class Print(namedtuple('Print', ['coord', 'output_name'])):
     def to_bf(self, declaration_positions, stack_index):
         pos = declaration_positions[self.output_name]
         return '(Print !{}>.{}<)'.format(pos, pos)
+
+
+class PrintString(namedtuple('PrintString', ['coord', 'output_name'])):
+    def to_bf(self, declaration_positions, stack_index):
+        pos = declaration_positions[self.output_name]
+        copy_command = Copy(coord=self.coord, from_name=self.output_name, to_name=TapeIndices.START_STATIC_SEGMENT)
+        return '(PrintString !{})'.format(copy_command.to_bf(declaration_positions, stack_index + 1))
 
 
 class Input(namedtuple('Input', ['coord', 'input_name'])):

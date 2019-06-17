@@ -69,6 +69,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.declarations = OrderedSet()
         self.functions = {}
         self.blocks_by_index = {}
+        self.static_data = []
 
         self.modifications_by_decl_name = {}
         self.decl_name_stack = []
@@ -211,7 +212,13 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.aprint('value', node.value)
         self.aprint('type', node.type)
 
-        return [SetValue(coord=str(node.coord), name=self.decl_name_stack[-1], value=node.value,
+        if node.type == 'string':
+            value = len(self.static_data)
+            self.static_data.append(node.value[1:-1])
+        else:
+            value = node.value
+
+        return [SetValue(coord=str(node.coord), name=self.decl_name_stack[-1], value=value,
                          type=node.type)]
 
     def visit_Decl(self, node):
@@ -262,22 +269,10 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         ops = []
 
-        if node.name.name == 'putchar':
-            arg_index = 0
-            arg = node.args.exprs[arg_index]
+        function_name = node.name.name
 
-            result_name = '{}_arg_{}'.format(node.name.name, arg_index)
-            self.push_decl(result_name)
-            decl_name = self.push_decl_mod(result_name)
-
-            ops += list(self.visit_child(arg))
-            ops += [Print(coord=str(node.coord), output_name=decl_name)]
-
-            self.pop_decl()
-            self.pop_decl()
-
-        elif node.name.name == 'getchar':
-            result_name = '{}_ret'.format(node.name.name)
+        if function_name == 'getchar':
+            result_name = '{}_ret'.format(function_name)
             self.push_decl(result_name)
 
             ops += [Input(coord=str(node.coord), input_name=result_name)]
@@ -287,6 +282,37 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             if len(self.decl_name_stack) > 0:
                 ops += [Move(coord=str(node.coord), from_name=result_name,
                              to_name=self.decl_name_stack[-1])]
+
+        elif function_name == 'putchar':
+            arg_index = 0
+            arg = node.args.exprs[arg_index]
+
+            arg_name = '{}_arg_{}'.format(function_name, arg_index)
+            self.push_decl(arg_name)
+            decl_name = self.push_decl_mod(arg_name)
+
+            ops += list(self.visit_child(arg))
+            ops += [Print(coord=str(node.coord), output_name=decl_name)]
+
+            self.pop_decl()
+            self.pop_decl()
+
+        elif function_name == 'puts':
+            arg_index = 0
+            arg = node.args.exprs[arg_index]
+
+            arg_name = '{}_arg_{}'.format(function_name, arg_index)
+            self.push_decl(arg_name)
+            decl_name = self.push_decl_mod(arg_name)
+
+            ops += list(self.visit_child(arg))
+            ops += [PrintString(coord=str(node.coord), output_name=decl_name)]
+
+            self.pop_decl()
+            self.pop_decl()
+
+        else:
+            raise Exception('Unknown function call {}'.format(function_name))
 
         return ops
 
@@ -404,10 +430,20 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             print(block.pretty_print())
             print()
 
+        print('static_data:', self.static_data)
+        output = '!(StaticSetup {} '.format(bf_travel(TapeIndices.START, TapeIndices.START_STATIC_SEGMENT))
+        for data_index, data in enumerate(self.static_data):
+            for c in data:
+                output += '>>{}+>'.format(str(ord(c)))
+            output += '>>>' # zero byte
+        static_segment_size = 3 * (sum([len(data) for data in self.static_data]) + len(self.static_data))
+        output += '{}<'.format(static_segment_size)
+        output += '{})\n'.format(bf_travel(TapeIndices.START_STATIC_SEGMENT, TapeIndices.START))
+
         start_ip = blocks_to_new_blocks.get(main_blocks[0].index)
         print('start_ip', start_ip)
 
-        output = '!{}+{}'.format(
+        output += '!{}+{}'.format(
             bf_travel(TapeIndices.START, TapeIndices.STOP_INDICATOR_INDEX),
             bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.IP_INDEX))
 
@@ -439,8 +475,8 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             else:
                 coord = None
 
-            if coord:
-                symbol_table[(start_bf_length, end_bf_length)] = coord
+            # if coord:
+            #     symbol_table[(start_bf_length, end_bf_length)] = coord
 
             if isinstance(block, IfBlock):
                 for op in block.cond_block:
@@ -498,4 +534,4 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             bf_travel(TapeIndices.FIRST_KNOWN_ZERO, TapeIndices.STOP_INDICATOR_INDEX))
 
         print()
-        return output, symbol_table, new_blocks_by_index
+        return output, symbol_table, self.static_data, new_blocks_by_index
