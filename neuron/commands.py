@@ -106,8 +106,12 @@ class Print(namedtuple('Print', ['coord', 'output_name'])):
 class PrintString(namedtuple('PrintString', ['coord', 'output_name'])):
     def to_bf(self, declaration_positions, stack_index):
         pos = declaration_positions[self.output_name]
-        copy_command = Copy(coord=self.coord, from_name=self.output_name, to_name=TapeIndices.START_STATIC_SEGMENT)
-        return '(PrintString !{})'.format(copy_command.to_bf(declaration_positions, stack_index + 1))
+        start_static_segment_distance = TapeIndices.START_STATIC_SEGMENT - TapeIndices.START_STACK
+        copy_command = Copy(coord=self.coord, from_name=self.output_name, to_name=start_static_segment_distance)
+        return '(PrintString {}{}![-3>+3<]3>- ![[-3>+3<]>+!2>-] !>+>[.2>+>] !<[-3<]<) !{}'.format(
+            copy_command.to_bf(declaration_positions, stack_index + 1),
+            bf_travel(TapeIndices.START_STACK, TapeIndices.START_STATIC_SEGMENT),
+            bf_travel(TapeIndices.START_STATIC_SEGMENT, TapeIndices.START_STACK))
 
 
 class Input(namedtuple('Input', ['coord', 'input_name'])):
