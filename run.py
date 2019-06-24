@@ -35,8 +35,8 @@ if __name__ == "__main__":
     brainfuck_compiler_visitor = BrainfuckCompilerVisitor()
     brainfuck_compiler_visitor.visit(ast)
 
-    code, symbol_table, static_data, _ = brainfuck_compiler_visitor.to_bf()
+    code, declaration_positions, symbol_table, static_data, _ = brainfuck_compiler_visitor.to_bf()
     pretty_printed_bf = pretty_print_bf(re.sub(r'\s+', ' ', code))
 
-    runtime = BrainfuckRuntime(brainfuck_compiler_visitor.declarations, source, static_data, symbol_table)
+    runtime = BrainfuckRuntime(declaration_positions, source, static_data, symbol_table)
     runtime.execute(pretty_printed_bf, debug=True)

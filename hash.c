@@ -1,6 +1,6 @@
 int main()
 {
-    char *x = "ab";
-    char *y = "cde";
-    puts(y);
+	// char x[] = {1, 2};
+	int x = 1;
+	puts(x);
 }

@@ -36,16 +36,14 @@ def colored_text_background(background_color, text_color, text):
 
 
 class BrainfuckRuntime:
-    def __init__(self, declarations, source, static_data, symbol_table):
+    def __init__(self, declaration_positions, source, static_data, symbol_table):
         self.tape = [0] * 32
         self.pointer = 0
         self.output = ''
         self.source = source
         self.static_data = static_data
         self.symbol_table = symbol_table
-        self.declaration_positions = {decl_name: index
-                                      for (index, decl_name)
-                                      in enumerate(declarations)}
+        self.declaration_positions = declaration_positions
 
     def print_source(self, op_start_index):
         source_line_index = None
@@ -77,6 +75,7 @@ class BrainfuckRuntime:
         tape_sections = [[TapeIndices.START, TapeIndices.END_STOP_INDICATOR],
                          [TapeIndices.START_IP_WORKSPACE, TapeIndices.END_IP_WORKSPACE],
                          [TapeIndices.START_STACK, TapeIndices.END_STACK],
+                         [TapeIndices.START_LVALUES, TapeIndices.END_LVALUES],
                          [TapeIndices.START_STATIC_SEGMENT, len(self.tape) - 1]]
 
         prefix = ' ' * len(str(instr_count)) + '  '
@@ -109,7 +108,7 @@ class BrainfuckRuntime:
             padded_name = (reversed_declarations[position] + ':').ljust(max_declaration_length+2)
             tape_position = TapeIndices.START_STACK + position
             value = self.tape[tape_position]
-            line = '[{}] {}{}'.format(position, padded_name, value)
+            line = '{}{}{}'.format('[{}] '.format(tape_position).rjust(5), padded_name, value)
             if self.pointer == tape_position:
                 line = colored_text_background(BackgroundColor.LIGHT_MAGENTA, TextColor.BLACK, line)
             print(line)

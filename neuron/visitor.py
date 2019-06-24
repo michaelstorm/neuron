@@ -146,7 +146,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         return self.push_sub_decl(mod_count)
 
     def push_sub_decl(self, suffix):
-        decl_name = '{}_{}'.format(self.decl_name_stack[-1], suffix)
+        decl_name = '{}~{}'.format(self.decl_name_stack[-1], suffix)
         self.push_decl(decl_name)
         return decl_name
 
@@ -186,6 +186,18 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         return ops
 
+    def visit_UnaryOp(self, node):
+        self.lprint(node.__class__.__name__, node.coord)
+        self.aprint('op', node.op)
+
+        ops = []
+
+        if node.op == '&':
+            ops.append(AddressOf(coord=str(node.coord), result_name=self.decl_name_stack[-1],
+                                 expr=node.expr))
+
+        return ops
+
     def visit_Compound(self, node):
         self.lprint(node.__class__.__name__, node.coord)
 
@@ -213,7 +225,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.aprint('type', node.type)
 
         if node.type == 'string':
-            value = sum(len(d) for d in self.static_data) + len(self.static_data)
+            value = TapeIndices.LVALUES_COUNT + sum(len(d) for d in self.static_data) + len(self.static_data)
             self.static_data.append(node.value[1:-1])
         else:
             value = node.value
@@ -224,6 +236,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
     def visit_Decl(self, node):
         self.lprint(node.__class__.__name__, node.coord)
         self.aprint('name', node.name)
+        self.aprint('init', node.init)
 
         return self.visit_assignment_body(str(node.coord), node.name, node.init)
 
@@ -287,7 +300,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             arg_index = 0
             arg = node.args.exprs[arg_index]
 
-            arg_name = '{}_arg_{}'.format(function_name, arg_index)
+            arg_name = '{}~arg~{}'.format(function_name, arg_index)
             self.push_decl(arg_name)
             decl_name = self.push_decl_mod(arg_name)
 
@@ -301,7 +314,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             arg_index = 0
             arg = node.args.exprs[arg_index]
 
-            arg_name = '{}_arg_{}'.format(function_name, arg_index)
+            arg_name = '{}~arg~{}'.format(function_name, arg_index)
             self.push_decl(arg_name)
             decl_name = self.push_decl_mod(arg_name)
 
@@ -329,7 +342,9 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         main_blocks = self.functions['main']
         declaration_positions = {decl_name: index
                                  for (index, decl_name)
-                                 in enumerate(self.declarations)}
+                                 in enumerate(filter(lambda decl_name: '~' in decl_name, self.declarations))}
+        for index, decl_name in enumerate(filter(lambda decl_name: '~' not in decl_name, self.declarations)):
+            declaration_positions[decl_name] = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + index * 3 + 2
 
         end_block = self.create_end_block()
 
@@ -529,4 +544,4 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             bf_travel(TapeIndices.FIRST_KNOWN_ZERO, TapeIndices.STOP_INDICATOR_INDEX))
 
         print()
-        return output, symbol_table, self.static_data, new_blocks_by_index
+        return output, declaration_positions, symbol_table, self.static_data, new_blocks_by_index
