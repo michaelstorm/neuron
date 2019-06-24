@@ -97,25 +97,19 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         return result
 
     def visit_assignment_body(self, coord, result_name, assignment_body):
-        self.push_decl(result_name)
+        decl_name = self.push_decl_mod(result_name)
 
-        if assignment_body:
-            decl_name = self.push_decl_mod(result_name)
+        ops = []
+        ops = list(self.visit_child(assignment_body))
+        ops += [
+            Zero(coord=coord, name=result_name),
+            Move(coord=coord, from_name=decl_name, to_name=result_name)
+        ]
 
-            ops = []
-            ops = list(self.visit_child(assignment_body))
-            ops += [
-                Zero(coord=coord, name=result_name),
-                Move(coord=coord, from_name=decl_name, to_name=result_name)
-            ]
+        self.pop_decl()
+        self.pop_decl()
 
-            self.pop_decl()
-            self.pop_decl()
-
-            return ops
-
-        else:
-            return []
+        return ops
 
     def generic_visit(self, node):
         self.lprint(node.__class__.__name__)
@@ -238,7 +232,12 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.aprint('name', node.name)
         self.aprint('init', node.init)
 
-        return self.visit_assignment_body(str(node.coord), node.name, node.init)
+        self.push_decl(node.name)
+
+        if node.init:
+            return self.visit_assignment_body(str(node.coord), node.name, node.init)
+        else:
+            return []
 
     def visit_ID(self, node):
         self.lprint(node.__class__.__name__, node.coord)
