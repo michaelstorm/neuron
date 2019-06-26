@@ -62,6 +62,16 @@ class IfBlock:
         return self.__str__()
 
 
+class Declaration(namedtuple('Declaration', ['kind', 'name'])):
+    @property
+    def size(self):
+        if type(self.kind) == c_ast.ArrayDecl:
+            print(self.kind.dim.value)
+            return 1
+        else:
+            return 1
+
+
 class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
     def __init__(self):
         self.level = 0
@@ -140,13 +150,15 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         return self.push_sub_decl(mod_count)
 
     def push_sub_decl(self, suffix):
-        decl_name = '{}~{}'.format(self.decl_name_stack[-1], suffix)
-        self.push_decl(decl_name)
+        stack_top = self.decl_name_stack[-1]
+        decl_name = '{}~{}'.format(stack_top.name, suffix)
+        self.push_decl(decl_name, stack_top.kind)
         return decl_name
 
-    def push_decl(self, decl_name):
-        self.declarations.add(decl_name)
-        self.decl_name_stack.append(decl_name)
+    def push_decl(self, decl_name, kind=None):
+        decl = Declaration(name=decl_name, kind=kind)
+        self.declarations.add(decl)
+        self.decl_name_stack.append(decl)
 
     def pop_decl(self):
         self.decl_name_stack.pop()
@@ -172,10 +184,10 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.pop_decl()
 
         if node.op == '+':
-            ops.append(Add(coord=str(node.coord), result_name=self.decl_name_stack[-1],
+            ops.append(Add(coord=str(node.coord), result_name=self.decl_name_stack[-1].name,
                            first_name=first_name, second_name=second_name))
         elif node.op == '*':
-            ops.append(Multiply(coord=str(node.coord), result_name=self.decl_name_stack[-1],
+            ops.append(Multiply(coord=str(node.coord), result_name=self.decl_name_stack[-1].name,
                                 first_name=first_name, second_name=second_name))
 
         return ops
@@ -187,7 +199,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         ops = []
 
         if node.op == '&':
-            ops.append(AddressOf(coord=str(node.coord), result_name=self.decl_name_stack[-1],
+            ops.append(AddressOf(coord=str(node.coord), result_name=self.decl_name_stack[-1].name,
                                  expr=node.expr))
 
         return ops
@@ -224,15 +236,14 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         else:
             value = node.value
 
-        return [SetValue(coord=str(node.coord), name=self.decl_name_stack[-1], value=value,
+        return [SetValue(coord=str(node.coord), name=self.decl_name_stack[-1].name, value=value,
                          type=node.type)]
 
     def visit_Decl(self, node):
         self.lprint(node.__class__.__name__, node.coord)
         self.aprint('name', node.name)
-        self.aprint('init', node.init)
 
-        self.push_decl(node.name)
+        self.push_decl(node.name, node.type)
 
         if node.init:
             return self.visit_assignment_body(str(node.coord), node.name, node.init)
@@ -244,8 +255,8 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.aprint('name', node.name)
 
         return [
-            Zero(coord=str(node.coord), name=self.decl_name_stack[-1]),
-            Copy(coord=str(node.coord), from_name=node.name, to_name=self.decl_name_stack[-1])
+            Zero(coord=str(node.coord), name=self.decl_name_stack[-1].name),
+            Copy(coord=str(node.coord), from_name=node.name, to_name=self.decl_name_stack[-1].name)
         ]
 
     def visit_If(self, node):
@@ -293,7 +304,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
             if len(self.decl_name_stack) > 0:
                 ops += [Move(coord=str(node.coord), from_name=result_name,
-                             to_name=self.decl_name_stack[-1])]
+                             to_name=self.decl_name_stack[-1].name)]
 
         elif function_name == 'putchar':
             arg_index = 0
@@ -338,12 +349,16 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
     def to_bf(self):
         print()
 
-        main_blocks = self.functions['main']
-        declaration_positions = {decl_name: index
-                                 for (index, decl_name)
-                                 in enumerate(filter(lambda decl_name: '~' in decl_name, self.declarations))}
-        for index, decl_name in enumerate(filter(lambda decl_name: '~' not in decl_name, self.declarations)):
-            declaration_positions[decl_name] = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + index * 3 + 2
+        declaration_positions = {}
+        position_offset = 0
+        for decl in filter(lambda decl: '~' in decl.name, self.declarations):
+            declaration_positions[decl.name] = position_offset
+            position_offset += decl.size
+
+        position_offset = 0
+        for decl in filter(lambda decl: '~' not in decl.name, self.declarations):
+            declaration_positions[decl.name] = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + position_offset * 3 + 2
+            position_offset += decl.size
 
         end_block = self.create_end_block()
 
@@ -379,6 +394,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                     if block.next_index:
                         find_terminal_blocks([block.next_index])
 
+        main_blocks = self.functions['main']
         find_terminal_blocks([block.index for block in main_blocks])
 
         modified = True
