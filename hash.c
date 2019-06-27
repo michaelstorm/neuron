@@ -1,5 +1,6 @@
 int main()
 {
-	int c = 1;
-	char y[2] = {2, 3};
+	char y[2];
+	y[1] = 'c';
+	putchar(y[1]);
 }

@@ -63,13 +63,58 @@ class IfBlock:
 
 
 class Declaration(namedtuple('Declaration', ['kind', 'name'])):
+    @staticmethod
+    def get_decl_size(decl):
+        if type(decl) == c_ast.ArrayDecl:
+            return int(decl.dim.value) * Declaration.get_decl_size(decl.type)
+        else:
+            return 1
+
     @property
     def size(self):
         if type(self.kind) == c_ast.ArrayDecl:
-            print(self.kind.dim.value)
-            return 1
+            return Declaration.get_decl_size(self.kind)
         else:
             return 1
+
+
+class ArrayRef:
+    def __init__(self, array_ref):
+        ar = array_ref
+        subscripts = []
+        while type(ar) == c_ast.ArrayRef:
+            subscripts.append(ar.subscript)
+            ar = ar.name
+
+        self.name = ar.name
+        self.subscripts = subscripts
+
+
+class DeclarationMapper:
+    def __init__(self, declarations):
+        positions = {}
+        position_offset = 0
+        for decl in filter(lambda decl: '~' in decl.name, declarations):
+            positions[decl.name] = position_offset
+            position_offset += decl.size
+
+        position_offset = 0
+        for decl in filter(lambda decl: '~' not in decl.name, declarations):
+            positions[decl.name] = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + position_offset * 3 + 2
+            position_offset += decl.size
+
+        self.positions = positions
+        self.total_size = position_offset
+
+    def __getitem__(self, lvalue):
+        if type(lvalue) == str:
+            return self.positions[lvalue]
+        elif type(lvalue) == c_ast.ID:
+            return self.positions[lvalue.name]
+        elif type(lvalue) == ArrayRef:
+            return self.positions[lvalue.name] + int(lvalue.subscripts[0].value) * 3 + 2
+        else:
+            raise Exception("%s has unsupported type for declaration mapper" % lvalue)
 
 
 class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
@@ -165,9 +210,20 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
     def visit_Assignment(self, node):
         self.lprint(node.__class__.__name__, node.coord)
-        self.aprint('name', node.lvalue.name)
+        self.aprint('name', node.lvalue)
 
-        return self.visit_assignment_body(str(node.coord), node.lvalue.name, node.rvalue)
+        if type(node.lvalue) == c_ast.ArrayRef:
+            result = ArrayRef(node.lvalue)
+        else:
+            result = node.lvalue
+
+        return self.visit_assignment_body(str(node.coord), result, node.rvalue)
+
+    def visit_ArrayRef(self, node):
+        self.lprint(node.__class__.__name__, node.coord)
+        self.aprint('name', node.name.name)
+
+        return [Move(coord=str(node.coord), from_name=ArrayRef(node), to_name=self.decl_name_stack[-1].name)]
 
     def visit_BinaryOp(self, node):
         self.lprint(node.__class__.__name__, node.coord)
@@ -349,19 +405,9 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
     def to_bf(self):
         print()
 
-        declaration_positions = {}
-        position_offset = 0
-        for decl in filter(lambda decl: '~' in decl.name, self.declarations):
-            declaration_positions[decl.name] = position_offset
-            position_offset += decl.size
-
-        position_offset = 0
-        for decl in filter(lambda decl: '~' not in decl.name, self.declarations):
-            declaration_positions[decl.name] = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + position_offset * 3 + 2
-            position_offset += decl.size
+        declaration_mapper = DeclarationMapper(self.declarations)
 
         end_block = self.create_end_block()
-
         for block in self.blocks_by_index.values():
             if isinstance(block, Block) and not isinstance(block, EndBlock) and block.next_index is None:
                 block.next_index = end_block.index
@@ -509,14 +555,14 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             if isinstance(block, IfBlock):
                 for op in block.cond_block:
                     start_bf_length = len(output)
-                    output += op.to_bf(declaration_positions, len(declaration_positions))
+                    output += op.to_bf(declaration_mapper, declaration_mapper.total_size)
                     end_bf_length = len(output)
                     symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
                 true_ip = ip_offset(block.index, block.true_blocks[0])
                 false_ip = ip_offset(block.index, block.false_blocks[0])
 
-                cond_result_pos = TapeIndices.START_STACK + declaration_positions[block.decl_name]
+                cond_result_pos = TapeIndices.START_STACK + declaration_mapper[block.decl_name]
 
                 def bf_set_ip(new_ip):
                     return '{}{}+{}'.format(
@@ -540,7 +586,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             else:
                 for op in block.ops:
                     start_bf_length = len(output)
-                    output += op.to_bf(declaration_positions, len(declaration_positions))
+                    output += op.to_bf(declaration_mapper, declaration_mapper.total_size)
                     end_bf_length = len(output)
                     symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
@@ -559,4 +605,4 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             bf_travel(TapeIndices.FIRST_KNOWN_ZERO, TapeIndices.STOP_INDICATOR_INDEX))
 
         print()
-        return output, declaration_positions, symbol_table, self.static_data, new_blocks_by_index
+        return output, declaration_mapper, symbol_table, self.static_data, new_blocks_by_index

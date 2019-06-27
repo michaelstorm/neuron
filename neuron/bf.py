@@ -36,14 +36,14 @@ def colored_text_background(background_color, text_color, text):
 
 
 class BrainfuckRuntime:
-    def __init__(self, declaration_positions, source, static_data, symbol_table):
+    def __init__(self, declaration_mapper, source, static_data, symbol_table):
         self.tape = [0] * 32
         self.pointer = 0
         self.output = ''
         self.source = source
         self.static_data = static_data
         self.symbol_table = symbol_table
-        self.declaration_positions = declaration_positions
+        self.declaration_mapper = declaration_mapper
 
     def print_source(self, op_start_index):
         source_line_index = None
@@ -101,8 +101,8 @@ class BrainfuckRuntime:
 
     def print_variables(self):
         # [0] prevents an empty declaration_position from causing max() to raise error
-        max_declaration_length = max([0] + [len(name) for name in self.declaration_positions])
-        reversed_declarations = {value: key for (key, value) in self.declaration_positions.items()}
+        max_declaration_length = max([0] + [len(name) for name in self.declaration_mapper.positions])
+        reversed_declarations = {value: key for (key, value) in self.declaration_mapper.positions.items()}
 
         for position in sorted(reversed_declarations.keys()):
             padded_name = (reversed_declarations[position] + ':').ljust(max_declaration_length+2)
@@ -132,7 +132,7 @@ class BrainfuckRuntime:
         self.print_output()
 
     def get_declaration_value(self, declaration_name):
-        position = self.declaration_positions[declaration_name]
+        position = self.declaration_mapper[declaration_name]
         tape_position = TapeIndices.START_STACK + position
         return self.tape[tape_position]
 
