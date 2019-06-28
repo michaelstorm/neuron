@@ -72,17 +72,23 @@ class BrainfuckRuntime:
         print('{}: {}'.format(instr_count, code_lines))
 
     def print_tape(self, instr_count):
-        tape_sections = [[TapeIndices.START, TapeIndices.END_STOP_INDICATOR],
-                         [TapeIndices.START_IP_WORKSPACE, TapeIndices.END_IP_WORKSPACE],
-                         [TapeIndices.START_STACK, TapeIndices.END_STACK],
-                         [TapeIndices.START_LVALUES, TapeIndices.END_LVALUES],
-                         [TapeIndices.START_STATIC_SEGMENT, len(self.tape) - 1]]
+        tape_sections = [('', [TapeIndices.START, TapeIndices.END_STOP_INDICATOR]),
+                         ('ip', [TapeIndices.START_IP_WORKSPACE, TapeIndices.END_IP_WORKSPACE]),
+                         ('stack', [TapeIndices.START_STACK, TapeIndices.END_STACK]),
+                         ('ivalues', [TapeIndices.START_INTERMEDIATE_VALUES, TapeIndices.END_INTERMEDIATE_VALUES]),
+                         ('lvalues', [TapeIndices.START_LVALUES, TapeIndices.END_LVALUES]),
+                         ('static', [TapeIndices.START_STATIC_SEGMENT, len(self.tape) - 1])]
 
         prefix = ' ' * len(str(instr_count)) + '  '
         colored_tape = ''
+        offset = 1
+        section_names = []
         for (value_index, value) in enumerate(self.tape):
-            if value_index in [section[0] for section in tape_sections]:
+            start_sections = {section[1][0]: section[0] for section in tape_sections}
+            if value_index in start_sections:
+                section_names.append([start_sections[value_index], offset])
                 colored_tape += '['
+                offset += 1
 
             if value_index == self.pointer:
                 colored_tape += colored_text_background(BackgroundColor.LIGHT_MAGENTA,
@@ -90,14 +96,19 @@ class BrainfuckRuntime:
             else:
                 colored_tape += str(value)
 
-            if value_index in [section[1] for section in tape_sections]:
+            if value_index in [section[1][1] for section in tape_sections]:
                 colored_tape += ']'
+                offset += 1
 
             colored_tape += ' '
+            offset += 2
 
-        print('{}{}{}\n'.format(prefix, '({}) '.format(self.pointer).ljust(5), colored_tape))
+        section_line = ''
+        for section_name in section_names:
+            section_line = section_line.ljust(section_name[1]) + section_name[0]
 
-        print('{}{}\n'.format(' ' * len(prefix), '/'.join(sorted(TapeIndices.get_names(self.pointer)))))
+        print('{}{}{}'.format(prefix, '({}) '.format(self.pointer).ljust(5), colored_tape))
+        print(prefix + ' ' * 5 + section_line + '\n')
 
     def print_variables(self):
         # [0] prevents an empty declaration_position from causing max() to raise error

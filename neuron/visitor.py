@@ -92,18 +92,17 @@ class ArrayRef:
 
 class DeclarationMapper:
     def __init__(self, declarations):
-        positions = {}
+        self.positions = {}
         position_offset = 0
         for decl in filter(lambda decl: '~' in decl.name, declarations):
-            positions[decl.name] = position_offset
+            self.positions[decl.name] = position_offset
             position_offset += decl.size
 
         position_offset = 0
         for decl in filter(lambda decl: '~' not in decl.name, declarations):
-            positions[decl.name] = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + position_offset * 3 + 2
+            self.positions[decl.name] = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + position_offset * 3 + 2
             position_offset += decl.size
 
-        self.positions = positions
         self.total_size = position_offset
 
     def __getitem__(self, lvalue):
@@ -555,7 +554,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             if isinstance(block, IfBlock):
                 for op in block.cond_block:
                     start_bf_length = len(output)
-                    output += op.to_bf(declaration_mapper, declaration_mapper.total_size)
+                    output += op.to_bf(declaration_mapper, 0)
                     end_bf_length = len(output)
                     symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
@@ -586,7 +585,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             else:
                 for op in block.ops:
                     start_bf_length = len(output)
-                    output += op.to_bf(declaration_mapper, declaration_mapper.total_size)
+                    output += op.to_bf(declaration_mapper, 0)
                     end_bf_length = len(output)
                     symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
