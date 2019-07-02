@@ -37,7 +37,7 @@ def colored_text_background(background_color, text_color, text):
 
 class BrainfuckRuntime:
     def __init__(self, declaration_mapper, source, static_data, symbol_table):
-        self.tape = [0] * 32
+        self.tape = [0] * (TapeIndices.START_STATIC_SEGMENT + 16)
         self.pointer = 0
         self.output = ''
         self.source = source

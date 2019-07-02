@@ -78,16 +78,14 @@ class Declaration(namedtuple('Declaration', ['kind', 'name'])):
             return 1
 
 
-class ArrayRef:
-    def __init__(self, array_ref):
-        ar = array_ref
-        subscripts = []
-        while type(ar) == c_ast.ArrayRef:
-            subscripts.append(ar.subscript)
-            ar = ar.name
+def parse_array_ref(array_ref):
+    ar = array_ref
+    subscripts = []
+    while type(ar) == c_ast.ArrayRef:
+        subscripts.append(ar.subscript)
+        ar = ar.name
 
-        self.name = ar.name
-        self.subscripts = subscripts
+        return ar.name, subscripts
 
 
 class DeclarationMapper:
@@ -110,10 +108,10 @@ class DeclarationMapper:
             return self.positions[lvalue]
         elif type(lvalue) == c_ast.ID:
             return self.positions[lvalue.name]
-        elif type(lvalue) == ArrayRef:
-            return self.positions[lvalue.name] + int(lvalue.subscripts[0].value) * 3 + 2
+        # elif type(lvalue) == ArrayRef:
+        #     return self.positions[lvalue.name] + int(lvalue.subscripts[0].value) * 3 + 2
         else:
-            raise Exception("%s has unsupported type for declaration mapper" % lvalue)
+            raise Exception("{} has unsupported type for declaration mapper".format(lvalue))
 
 
 class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
@@ -150,18 +148,43 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.level -= 1
         return result
 
-    def visit_assignment_body(self, coord, result_name, assignment_body):
-        decl_name = self.push_decl_mod(result_name)
-
+    def visit_assignment_body(self, coord, result_node, assignment_body):
         ops = []
-        ops = list(self.visit_child(assignment_body))
-        ops += [
-            Zero(coord=coord, name=result_name),
-            Move(coord=coord, from_name=decl_name, to_name=result_name)
-        ]
 
-        self.pop_decl()
-        self.pop_decl()
+        if hasattr(result_node, 'lvalue') and type(result_node.lvalue) == c_ast.ArrayRef:
+            base_name, subscripts = parse_array_ref(result_node.lvalue)
+
+            subscript_name = '{}~sub~0'.format(base_name)
+            self.push_decl(subscript_name)
+
+            ops += list(self.visit_child(subscripts[0]))
+
+            rvalue_name = '{}~rvalue~0'.format(base_name)
+            self.push_decl(rvalue_name)
+
+            ops += list(self.visit_child(result_node.rvalue))
+            ops += [SetAddressableValue(coord=coord, base_name=base_name, offset_name=subscript_name, rvalue_name=rvalue_name)]
+
+            self.pop_decl()
+            self.pop_decl()
+
+        else:
+            if type(result_node) == str:
+                result = result_node
+            elif type(result_node.lvalue) == c_ast.ID:
+                result = result_node.lvalue.name
+            else:
+                raise Exception('Unsupported type %s', type(result_node.lvalue))
+
+            decl_name = self.push_decl_mod(result)
+
+            ops += list(self.visit_child(assignment_body))
+            ops += [
+                Zero(coord=coord, name=result),
+                Move(coord=coord, from_name=decl_name, to_name=result)
+            ]
+
+            self.pop_decl()
 
         return ops
 
@@ -211,12 +234,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.lprint(node.__class__.__name__, node.coord)
         self.aprint('name', node.lvalue)
 
-        if type(node.lvalue) == c_ast.ArrayRef:
-            result = ArrayRef(node.lvalue)
-        else:
-            result = node.lvalue
-
-        return self.visit_assignment_body(str(node.coord), result, node.rvalue)
+        return self.visit_assignment_body(str(node.coord), node, node.rvalue)
 
     def visit_ArrayRef(self, node):
         self.lprint(node.__class__.__name__, node.coord)
@@ -505,13 +523,21 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             print(block.pretty_print())
             print()
 
+        static_data_size = sum([len(data) for data in self.static_data]) + len(self.static_data)
+        addressable_memory_size = TapeIndices.LVALUES_COUNT + static_data_size
+        output = '(AddressableSetup !{}4>{}{}4<)'.format(
+            bf_travel(TapeIndices.START, TapeIndices.START_ADDRESSABLE_MEMORY),
+            '+3>' * addressable_memory_size,
+            '3<' * addressable_memory_size
+        )
+
         print('static_data:', self.static_data)
-        output = '(StaticSetup !{} '.format(bf_travel(TapeIndices.START, TapeIndices.START_STATIC_SEGMENT))
+        output += '(StaticSetup {} '.format(bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, TapeIndices.START_STATIC_SEGMENT))
         for data_index, data in enumerate(self.static_data):
             for c in data:
                 output += '>>{}+>'.format(str(ord(c)))
             output += '>>> ' # zero byte
-        static_segment_size = 3 * (sum([len(data) for data in self.static_data]) + len(self.static_data))
+        static_segment_size = 3 * static_data_size
         output += '{}<'.format(static_segment_size)
         output += '{})'.format(bf_travel(TapeIndices.START_STATIC_SEGMENT, TapeIndices.START))
 
