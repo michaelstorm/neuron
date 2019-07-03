@@ -240,7 +240,19 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.lprint(node.__class__.__name__, node.coord)
         self.aprint('name', node.name.name)
 
-        return [Move(coord=str(node.coord), from_name=ArrayRef(node), to_name=self.decl_name_stack[-1].name)]
+        result_name = self.decl_name_stack[-1].name
+        base_name, subscripts = parse_array_ref(node)
+
+        subscript_name = '{}~sub~0'.format(base_name)
+        self.push_decl(subscript_name)
+
+        ops = list(self.visit_child(subscripts[0]))
+
+        ops += [
+            GetAddressableValue(coord=str(node.coord), base_name=base_name,
+                                offset_name=subscript_name, result_name=result_name)
+        ]
+        return ops
 
     def visit_BinaryOp(self, node):
         self.lprint(node.__class__.__name__, node.coord)

@@ -32,7 +32,7 @@ class Move(namedtuple('Move', ['coord', 'from_name', 'to_name'])):
         travel_forward = bf_travel(from_pos, to_pos)
         travel_backward = bf_travel(from_pos, to_pos, opposite=True)
 
-        return '(Move !{}>[-{}+{}]{}<)'.format(from_pos, travel_forward, travel_backward, from_pos)
+        return '(Move {}>[-{}+{}]{}<)'.format(from_pos, travel_forward, travel_backward, from_pos)
 
 
 class Copy(namedtuple('Copy', ['coord', 'from_name', 'to_name'])):
@@ -118,14 +118,56 @@ class Print(namedtuple('Print', ['coord', 'output_name'])):
         return '(Print !{}>.{}<)'.format(pos, pos)
 
 
+class ForwardMem(namedtuple('ForwardMem', ['coord'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        return '[[-3>+3<]3>-] !2>'
+
+
+class BackMem(namedtuple('BackMem', ['coord'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        return '!<[3<]< {}'.format(
+            bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, TapeIndices.START_STACK)
+        )
+
+
+class GoMem(namedtuple('GoMem', ['coord', 'base_name', 'offset_name'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        base_pos = addressable_offset(declaration_mapper, self.base_name)
+        start_addressable_memory_distance = TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK
+        copy_offset_command = Copy(coord=self.coord, from_name=self.offset_name, to_name=start_addressable_memory_distance)
+
+        return '(GoMem !{}{}+{}{}{} {})'.format(
+            bf_travel(TapeIndices.START_STACK, TapeIndices.START_ADDRESSABLE_MEMORY),
+            base_pos,
+            bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, TapeIndices.START_STACK),
+            copy_offset_command.to_bf(declaration_mapper, stack_index + 2),
+            bf_travel(TapeIndices.START_STACK, TapeIndices.START_ADDRESSABLE_MEMORY),
+            ForwardMem(coord=self.coord).to_bf(declaration_mapper, stack_index + 3))
+
+
+class ForwardMem(namedtuple('ForwardMem', ['coord'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        return '[[-3>+3<]3>-] !2>'
+
+
+class BackMem(namedtuple('BackMem', ['coord'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        return '!<[3<]< {}'.format(
+            bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, TapeIndices.START_STACK)
+        )
+
+
 class PrintString(namedtuple('PrintString', ['coord', 'output_name'])):
     def to_bf(self, declaration_mapper, stack_index):
         start_addressable_memory_distance = TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK
         copy_command = Copy(coord=self.coord, from_name=self.output_name, to_name=start_addressable_memory_distance)
-        return '(PrintString !{}{} ![[-3>+3<]3>-] !2>[.3>] !<[3<]< !{})'.format(
+        back_mem_command = BackMem(coord=self.coord)
+
+        return '(PrintString !{}{} {} [.3>] !{})'.format(
             copy_command.to_bf(declaration_mapper, stack_index + 1),
             bf_travel(TapeIndices.START_STACK, TapeIndices.START_ADDRESSABLE_MEMORY),
-            bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, TapeIndices.START_STACK))
+            ForwardMem(coord=coord).to_bf(declaration_mapper, stack_index + 3),
+            back_mem_command.to_bf(declaration_mapper, stack_index + 1))
 
 
 class SetAddressableValue(namedtuple('SetAddressableValue', ['coord', 'base_name', 'offset_name', 'rvalue_name'])):
@@ -134,15 +176,32 @@ class SetAddressableValue(namedtuple('SetAddressableValue', ['coord', 'base_name
         rvalue_pos = declaration_mapper[self.rvalue_name] + TapeIndices.START_STACK
         start_addressable_memory_distance = TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK
         copy_offset_command = Copy(coord=self.coord, from_name=self.offset_name, to_name=start_addressable_memory_distance)
-        return '(SetAddressableValue !{}[-{}{}+{}{}{} ![[-3>+3<]3>-] !2>+ !<[3<]< {}] !{})'.format(
+        go_mem_command = GoMem(coord=self.coord, base_name=self.base_name, offset_name=self.offset_name)
+
+        return '(SetAddressableValue {}[-{}{} + <[3<]< {}] {})'.format(
             bf_travel(TapeIndices.START_STACK, rvalue_pos),
-            bf_travel(rvalue_pos, TapeIndices.START_ADDRESSABLE_MEMORY),
-            base_pos,
-            bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, TapeIndices.START_STACK),
-            copy_offset_command.to_bf(declaration_mapper, stack_index + 2),
-            bf_travel(TapeIndices.START_STACK, TapeIndices.START_ADDRESSABLE_MEMORY),
+            bf_travel(rvalue_pos, TapeIndices.START_STACK),
+            go_mem_command.to_bf(declaration_mapper, stack_index + 1),
             bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, rvalue_pos),
             bf_travel(rvalue_pos, TapeIndices.START_STACK))
+
+
+class GetAddressableValue(namedtuple('GetAddressableValue', ['coord', 'base_name', 'offset_name', 'result_name'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        base_pos = addressable_offset(declaration_mapper, self.base_name)
+        result_pos = declaration_mapper[self.result_name] + TapeIndices.START_STACK
+        start_addressable_memory_distance = TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK
+        copy_offset_command = Copy(coord=self.coord, from_name=self.offset_name, to_name=start_addressable_memory_distance)
+        go_mem_command = GoMem(coord=self.coord, base_name=self.base_name, offset_name=self.offset_name)
+        back_mem_command = BackMem(coord=self.coord)
+
+        return '(GetAddressableValue !{} [- !<[3<]< {}+ {}{}] {})'.format(
+            go_mem_command.to_bf(declaration_mapper, stack_index + 1),
+            bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, result_pos),
+            bf_travel(result_pos, TapeIndices.START_STACK),
+            go_mem_command.to_bf(declaration_mapper, stack_index + 2),
+            back_mem_command.to_bf(declaration_mapper, stack_index + 2))
+
 
 class Input(namedtuple('Input', ['coord', 'input_name'])):
     def to_bf(self, declaration_mapper, stack_index):
