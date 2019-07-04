@@ -12,14 +12,14 @@ class VisitorTest(TestCase):
 
         visitor = BrainfuckCompilerVisitor()
         visitor.visit(ast)
-        code, symbol_table, blocks = visitor.to_bf()
+        code, declaration_mapper, symbol_table, static_data, blocks = visitor.to_bf()
 
-        runtime = BrainfuckRuntime(visitor.declarations, source, symbol_table)
+        runtime = BrainfuckRuntime(declaration_mapper, visitor.declarations, source, symbol_table)
         runtime.execute(code)
 
         return code, symbol_table, blocks, visitor, runtime
 
-    def compile_test(self):
+    def test_compile(self):
         source = """
         int main()
         {
@@ -30,7 +30,7 @@ class VisitorTest(TestCase):
 
         code, symbol_table, blocks, visitor, runtime = self.execute_code(source)
 
-        self.assertEqual(['x', 'x_0', 'y'], visitor.declarations)
+        self.assertEqual(set(['x', 'x~0', 'y']), set([d.name for d in visitor.declarations]))
 
         main = visitor.functions['main']
         self.assertEqual(0, main[0].index)
@@ -39,11 +39,11 @@ class VisitorTest(TestCase):
         end_block = blocks[main[0].next_index]
         self.assertEqual(EndBlock, type(end_block))
 
-        self.assertEqual(SetValue(name='x_0', value='2', type='int', coord=':4'), main[0].ops[0])
+        self.assertEqual(SetValue(name='x~0', value='2', type='int', coord=':4'), main[0].ops[0])
         self.assertEqual(Zero(name='x', coord=':4'), main[0].ops[1])
-        self.assertEqual(Move(from_name='x_0', to_name='x', coord=':4'), main[0].ops[2])
+        self.assertEqual(Move(from_name='x~0', to_name='x', coord=':4'), main[0].ops[2])
 
-    def if_test(self):
+    def test_if(self):
         source = """
         int main()
         {
@@ -62,13 +62,13 @@ class VisitorTest(TestCase):
 
         code, symbol_table, blocks, visitor, runtime = self.execute_code(source)
 
-        self.assertEqual(['x', 'x_0', 'y', 'y_0', 'if', 'if_0', 'y_1', 'if_1', 'y_2'],
-                         visitor.declarations)
+        self.assertEqual(set(['x', 'x~0', 'y', 'y~0', 'if', 'if~0', 'y~1', 'if~1', 'y~2']),
+                         set([d.name for d in visitor.declarations]))
 
         self.assertEqual(2, runtime.get_declaration_value('x'))
         self.assertEqual(3, runtime.get_declaration_value('y'))
 
-    def chained_if_else_test(self):
+    def test_chained_if_else(self):
         source = """
         int main()
         {
