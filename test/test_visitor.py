@@ -134,3 +134,23 @@ class VisitorTest(TestCase):
 
         *_, runtime = self.execute_code(source)
         self.assertEqual(4, runtime.get_declaration_value('y'))
+
+    def test_addressable_memory(self):
+        source = """
+        int main()
+        {
+            char a;
+            char b;
+            char c[2];
+            c[1] = 4;
+            b = c[1];
+        }
+        """
+
+        code, symbol_table, blocks, visitor, runtime = self.execute_code(source)
+
+        self.assertEqual(set(['a', 'b', 'c', 'c~0', 'c~sub~0', 'c~rvalue~0']),
+                         set([d.name for d in visitor.declarations]))
+
+        self.assertEqual(4, runtime.get_declaration_value('b'))
+        self.assertEqual(4, runtime.get_array_value('c', 1))

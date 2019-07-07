@@ -96,6 +96,8 @@ class DeclarationMapper:
             self.positions[decl.name] = position_offset
             position_offset += decl.size
 
+        self.stack_size = position_offset
+
         position_offset = 0
         for decl in filter(lambda decl: '~' not in decl.name, declarations):
             self.positions[decl.name] = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + position_offset * 3 + 2
@@ -104,7 +106,9 @@ class DeclarationMapper:
         self.total_size = position_offset
 
     def __getitem__(self, lvalue):
-        if type(lvalue) == str:
+        if type(lvalue) == int:
+            return lvalue
+        elif type(lvalue) == str:
             return self.positions[lvalue]
         elif type(lvalue) == c_ast.ID:
             return self.positions[lvalue.name]
@@ -542,30 +546,32 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         static_data_size = sum([len(data) for data in self.static_data]) + len(self.static_data)
         addressable_memory_size = TapeIndices.LVALUES_COUNT + static_data_size
-        output = '(AddressableSetup !{}4>{}{}4<)'.format(
+        output = format_bf('AddressableSetup', None, '{}4>{}{}4<'.format(
             bf_travel(TapeIndices.START, TapeIndices.START_ADDRESSABLE_MEMORY),
             '+3>' * addressable_memory_size,
             '3<' * addressable_memory_size
-        )
+        ))
 
         print('static_data:', self.static_data)
-        output += '(StaticSetup {} '.format(bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, TapeIndices.START_STATIC_SEGMENT))
+        static_setup_section = '{} '.format(bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, TapeIndices.START_STATIC_SEGMENT))
         for data_index, data in enumerate(self.static_data):
             for c in data:
-                output += '>>{}+>'.format(str(ord(c)))
-            output += '>>> ' # zero byte
+                static_setup_section += '>>{}+>'.format(str(ord(c)))
+            static_setup_section += '>>> ' # zero byte
         static_segment_size = 3 * static_data_size
-        output += '{}<'.format(static_segment_size)
-        output += '{})'.format(bf_travel(TapeIndices.START_STATIC_SEGMENT, TapeIndices.START))
+        static_setup_section += '{}<'.format(static_segment_size)
+        static_setup_section += '{}'.format(bf_travel(TapeIndices.START_STATIC_SEGMENT, TapeIndices.START))
+        output += format_bf('StaticSetup', None, static_setup_section)
 
         start_ip = blocks_to_new_blocks.get(main_blocks[0].index)
         print('start_ip', start_ip)
 
-        output += '!{}+{}'.format(
+        output += '{}+{}'.format(
             bf_travel(TapeIndices.START, TapeIndices.STOP_INDICATOR_INDEX),
             bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.IP_INDEX))
 
-        output += '(IPSetup {}+ 3>+>+ 4<){} [{}'.format(start_ip,
+        output += format_bf('IPSetup', None, '{}+ 3>+>+ 4<'.format(start_ip))
+        output += '{} [{}'.format(
             bf_travel(TapeIndices.IP_INDEX, TapeIndices.STOP_INDICATOR_INDEX),
             bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.FIRST_KNOWN_ZERO))
 
@@ -576,11 +582,14 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             print('%d: %s' % (block_index, block.pretty_print()))
 
             start_bf_length = len(output)
-            output += '!{} [{} (IPCheck >+< [->->]3>[>] {})'.format(
+            output += '{} [{} '.format(
                 bf_travel(TapeIndices.FIRST_KNOWN_ZERO, TapeIndices.STOP_INDICATOR_INDEX),
-                bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.IP_INDEX),
-                bf_travel(TapeIndices.END_IP_WORKSPACE, TapeIndices.IP_ZERO_INDICATOR))
-            output += '(Block ![-{}'.format(
+                bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.IP_INDEX))
+            output += format_bf('IPCheck', None, '>+< [->->]3>[>] {}'.format(
+                bf_travel(TapeIndices.END_IP_WORKSPACE, TapeIndices.IP_ZERO_INDICATOR)))
+            output += '{}{} [-{}'.format(
+                bf_start_paren,
+                format_bf_name('Block'),
                 bf_travel(TapeIndices.IP_ZERO_INDICATOR, TapeIndices.START_STACK))
             end_bf_length = len(output)
 
@@ -597,7 +606,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             if isinstance(block, IfBlock):
                 for op in block.cond_block:
                     start_bf_length = len(output)
-                    output += op.to_bf(declaration_mapper, 0)
+                    output += op.to_bf(declaration_mapper, declaration_mapper.stack_size)
                     end_bf_length = len(output)
                     symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
@@ -612,7 +621,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                         new_ip,
                         bf_travel(TapeIndices.IP_INDEX, cond_result_pos))
 
-                output += '(GoToTrue !{}{} [[-]{}{}])'.format(
+                output += '(GoToTrue {}{} [[-]{}{}])'.format(
                     bf_travel(TapeIndices.START_STACK, cond_result_pos),
                     '>+<' if false_ip is not None else '',
                     bf_set_ip(true_ip),
@@ -628,19 +637,20 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             else:
                 for op in block.ops:
                     start_bf_length = len(output)
-                    output += op.to_bf(declaration_mapper, 0)
+                    output += op.to_bf(declaration_mapper, declaration_mapper.stack_size)
                     end_bf_length = len(output)
                     symbol_table[(start_bf_length, end_bf_length)] = op.coord
 
                 if block.next_index is not None:
                     new_ip = ip_offset(block.index, block.next_index)
-                    output += '(NextBlock !{}{}+{})'.format(
+                    output += format_bf('NextBlock', None, '{}{}+{}'.format(
                         bf_travel(TapeIndices.START_STACK, TapeIndices.IP_INDEX),
                         new_ip,
-                        bf_travel(TapeIndices.IP_INDEX, TapeIndices.START_STACK))
+                        bf_travel(TapeIndices.IP_INDEX, TapeIndices.START_STACK)))
 
-            output += '{}]){}] <[<]'.format(
+            output += '{}]{}{}] <[<]'.format(
                 bf_travel(TapeIndices.START_STACK, TapeIndices.IP_ZERO_INDICATOR),
+                bf_end_paren,
                 bf_travel(TapeIndices.IP_ZERO_INDICATOR, TapeIndices.KNOWN_ZERO))
 
         output += '{}]'.format(

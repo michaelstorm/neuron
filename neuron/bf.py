@@ -1,38 +1,8 @@
+from .console import BackgroundColor, TextColor, colored_text_background
 from .visitor import TapeIndices
 from pprint import pprint
 import re
 import sys
-
-
-class TextColor:
-    DEFAULT = 39
-    BLACK = 30
-
-
-class BackgroundColor:
-    DEFAULT = 49
-    RED = 41
-    LIGHT_GREEN = 102
-    LIGHT_MAGENTA = 105
-    LIGHT_CYAN = 106
-
-
-def text_color_code(color):
-    return '\033[{}m'.format(color)
-
-
-def colored_text(color, text):
-    default_color = text_color_code(TextColor.DEFAULT)
-    return '{}{}{}'.format(text_color_code(color), text, default_color)
-
-
-def colored_background(color, text):
-    default_color = text_color_code(BackgroundColor.DEFAULT)
-    return '{}{}{}'.format(text_color_code(color), text, default_color)
-
-
-def colored_text_background(background_color, text_color, text):
-    return colored_background(background_color, colored_text(text_color, text))
 
 
 class BrainfuckRuntime:
@@ -75,7 +45,6 @@ class BrainfuckRuntime:
         tape_sections = [('', [TapeIndices.START, TapeIndices.END_STOP_INDICATOR]),
                          ('ip', [TapeIndices.START_IP_WORKSPACE, TapeIndices.END_IP_WORKSPACE]),
                          ('stack', [TapeIndices.START_STACK, TapeIndices.END_STACK]),
-                         ('ivalues', [TapeIndices.START_INTERMEDIATE_VALUES, TapeIndices.END_INTERMEDIATE_VALUES]),
                          ('lvalues', [TapeIndices.START_LVALUES, TapeIndices.END_LVALUES]),
                          ('static', [TapeIndices.START_STATIC_SEGMENT, len(self.tape) - 1])]
 
@@ -147,11 +116,18 @@ class BrainfuckRuntime:
         tape_position = TapeIndices.START_STACK + position
         return self.tape[tape_position]
 
+    def get_array_value(self, declaration_name, offset):
+        position = self.declaration_mapper[declaration_name]
+        tape_position = TapeIndices.START_STACK + position + offset * 3 + 2
+        return self.tape[tape_position]
+
     def execute(self, code, debug=False):
         index = 0
         instr_count = 0
         last_op = None
         step_through = False
+        comment = False
+        color_code = False
         number = None
         op_start_index = 0
         previous_input_line = 'c'
@@ -163,93 +139,103 @@ class BrainfuckRuntime:
 
             op = code[index]
 
-            if op == '!' and not skip_breakpoints:
-                step_through = True
+            if op == '{':
+                comment = True
+            elif op == '}':
+                comment = False
+            elif op == '\033':
+                color_code = True
+            elif color_code and op == 'm':
+                color_code = False
+            elif not comment and not color_code:
+                if op == '!' and not skip_breakpoints:
+                    step_through = True
 
-            elif ord(op) in range(ord('0'), ord('9') + 1):
-                digit = ord(op) - ord('0')
-                if number is None:
-                    number = digit
-                else:
-                    number = number*10 + digit
+                elif ord(op) in range(ord('0'), ord('9') + 1):
+                    digit = ord(op) - ord('0')
+                    if number is None:
+                        number = digit
+                    else:
+                        number = number*10 + digit
 
-            elif op in ('+', '-', '>', '<', '.', ',', '[', ']'):
-                if op != last_op:
-                    if debug:
-                        self.print_state(instr_count, op_start_index, index, code)
+                elif op in ('+', '-', '>', '<', '.', ',', '[', ']'):
+                    if op != last_op:
+                        if debug:
+                            self.print_state(instr_count, op_start_index, index, code)
 
-                    if step_through:
-                        line = input()
-                        if len(line) == 0:
-                            line = previous_input_line
-
-                        command = line[0]
-                        if line == 'c':
-                            step_through = False
-                        elif line == 'q':
-                            sys.exit(0)
-                        elif line == 'f':
-                            step_through = False
-                            skip_breakpoints = True
-
-                        previous_input_line = line
-
-                count = 1 if number is None else number
-                for i in range(count):
-                    if op == '+':
-                        self.tape[self.pointer] += 1
-                    elif op == '-':
-                        self.tape[self.pointer] -= 1
-                    elif op == '>':
-                        self.pointer += 1
-                        if self.pointer == len(self.tape):
-                            self.tape.append(0)
-                    elif op == '<':
-                        self.pointer -= 1
-
-                    elif op == '.':
-                        value = chr(self.tape[self.pointer])
-                        self.output += value
-
-                    elif op == ',':
-                        line = ''
-                        while len(line) == 0:
-                            print('> ', end='')
+                        if step_through:
                             line = input()
+                            if len(line) == 0:
+                                line = previous_input_line
 
-                        self.tape[self.pointer] = ord(line[0])
+                            command = line[0]
+                            if line == 'c':
+                                step_through = False
+                            elif line == 'q':
+                                sys.exit(0)
+                            elif line == 'f':
+                                step_through = False
+                                skip_breakpoints = True
 
-                    elif op == '[':
-                        last_op = None
-                        if self.tape[self.pointer] == 0:
+                            previous_input_line = line
+
+                    count = 1 if number is None else number
+                    for i in range(count):
+                        if op == '+':
+                            self.tape[self.pointer] += 1
+                        elif op == '-':
+                            self.tape[self.pointer] -= 1
+                        elif op == '>':
+                            self.pointer += 1
+                            if self.pointer == len(self.tape):
+                                self.tape.append(0)
+                        elif op == '<':
+                            self.pointer -= 1
+
+                        elif op == '.':
+                            value = chr(self.tape[self.pointer])
+                            self.output += value
+
+                        elif op == ',':
+                            line = ''
+                            while len(line) == 0:
+                                print('> ', end='')
+                                line = input()
+
+                            self.tape[self.pointer] = ord(line[0])
+
+                        elif op == '[':
+                            last_op = None
+                            if self.tape[self.pointer] == 0:
+                                stack = 1
+                                while stack > 0:
+                                    index += 1
+                                    if code[index] == '[' and code[index-1] != '\033':
+                                        stack += 1
+                                    elif code[index] == ']':
+                                        stack -= 1
+
+                        elif op == ']':
+                            last_op = None
                             stack = 1
                             while stack > 0:
-                                index += 1
-                                if code[index] == '[':
-                                    stack += 1
-                                elif code[index] == ']':
+                                index -= 1
+                                if code[index] == '[' and (index == 0 or code[index-1] != '\033'):
                                     stack -= 1
+                                elif code[index] == ']':
+                                    stack += 1
 
-                    elif op == ']':
-                        last_op = None
-                        stack = 1
-                        while stack > 0:
                             index -= 1
-                            if code[index] == '[':
-                                stack -= 1
-                            elif code[index] == ']':
-                                stack += 1
 
-                        index -= 1
+                    instr_count += 1
+                    number = None
+                    op_start_index = index + 1
 
-                instr_count += 1
-                number = None
-                op_start_index = index + 1
+                else:
+                    op_start_index = index + 1
 
-            else:
-                op_start_index = index + 1
+                last_op = op
 
-            last_op = op
             index += 1
 
         if debug:

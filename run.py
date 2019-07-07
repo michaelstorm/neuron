@@ -9,19 +9,41 @@ def pretty_print_bf(code):
     output = ''
     tabs = 0
     newline = False
-    for i, c in enumerate(code):
-        if c == '(' and i > 0:
-            tabs += 1
-            newline = True
+    color_code = False
+    printed_non_space_char = False
+    last_non_space_char = None
 
-        if c != ')' and newline:
-            output += "\n{}".format("\t" * tabs)
-            newline = False
+    for i, c in enumerate(code):
+        if c == '\033':
+            color_code = True
+
+        if not color_code:
+            if c == '(' and last_non_space_char != None:
+                tabs += 1
+                newline = True
+
+            if newline: # and last_non_space_char != ')':
+                if printed_non_space_char:
+                    output += "\n"
+
+                output += "\t" * tabs
+                newline = False
+                printed_non_space_char = False
 
         output += c
-        if c == ')':
-            tabs -= 1
-            newline = True
+
+        if not color_code:
+            if c == ')':
+                tabs -= 1
+                newline = True
+
+            if not c.isspace():
+                printed_non_space_char = True
+                last_non_space_char = c
+
+        elif c == 'm':
+            color_code = False
+
     return output
 
 
