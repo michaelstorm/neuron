@@ -15,7 +15,8 @@ def bf_travel(from_pos, to_pos, opposite=False):
 
 
 def addressable_offset(declaration_mapper, name):
-    return ((declaration_mapper[name] - 2) - (TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK)) // 3
+    position = declaration_mapper[name].position
+    return ((position - 2) - (TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK)) // 3
 
 
 bf_start_paren = colored_text(TextColor.LIGHT_GRAY, '(')
@@ -60,8 +61,8 @@ def commandtuple(name, fields):
 
 class Move(commandtuple('Move', ['coord', 'from_name', 'to_name'])):
     def to_bf(self, declaration_mapper, stack_index):
-        from_pos = declaration_mapper[self.from_name]
-        to_pos = declaration_mapper[self.to_name]
+        from_pos = declaration_mapper[self.from_name].position
+        to_pos = declaration_mapper[self.to_name].position
 
         return self.format_bf('{}>[-{}+{}]{}<',
             from_pos,
@@ -72,8 +73,8 @@ class Move(commandtuple('Move', ['coord', 'from_name', 'to_name'])):
 
 class Copy(commandtuple('Copy', ['coord', 'from_name', 'to_name'])):
     def to_bf(self, declaration_mapper, stack_index):
-        start_pos = declaration_mapper[self.from_name]
-        end_pos = declaration_mapper[self.to_name]
+        start_pos = declaration_mapper[self.from_name].position
+        end_pos = declaration_mapper[self.to_name].position
 
         staging_pos = stack_index
         move_command = Move(coord=self.coord, from_name=staging_pos, to_name=self.from_name)
@@ -89,7 +90,7 @@ class Copy(commandtuple('Copy', ['coord', 'from_name', 'to_name'])):
 
 class SetValue(commandtuple('SetValue', ['coord', 'name', 'value', 'type'])):
     def to_bf(self, declaration_mapper, stack_index):
-        pos = declaration_mapper[self.name]
+        pos = declaration_mapper[self.name].position
 
         if self.type in ('int', 'string'):
             bf_value = self.value
@@ -110,13 +111,13 @@ class AddressOf(commandtuple('SetValue', ['coord', 'result_name', 'expr'])):
             raise Exception('Unimplemented lvalue type {} for AddressOf operator'.format(expr_type))
 
         lvalue_pos = addressable_offset(declaration_mapper, self.expr.name)
-        result_pos = declaration_mapper[self.result_name]
+        result_pos = declaration_mapper[self.result_name].position
         return self.format_bf('{}>[-]{}+{}<', result_pos, lvalue_pos, result_pos)
 
 
 class Zero(commandtuple('Zero', ['coord', 'name'])):
     def to_bf(self, declaration_mapper, stack_index):
-        pos = declaration_mapper[self.name]
+        pos = declaration_mapper[self.name].position
         return self.format_bf('{}>[-]{}<', pos, pos)
 
 
@@ -131,8 +132,8 @@ class Add(commandtuple('Add', ['coord', 'result_name', 'first_name', 'second_nam
 
 class Multiply(commandtuple('Multiply', ['coord', 'result_name', 'first_name', 'second_name'])):
     def to_bf(self, declaration_mapper, stack_index):
-        first_pos = declaration_mapper[self.first_name]
-        second_pos = declaration_mapper[self.second_name]
+        first_pos = declaration_mapper[self.first_name].position
+        second_pos = declaration_mapper[self.second_name].position
 
         copy_command = Copy(from_name=self.second_name, to_name=self.result_name)
 
@@ -142,7 +143,7 @@ class Multiply(commandtuple('Multiply', ['coord', 'result_name', 'first_name', '
 
 class Print(commandtuple('Print', ['coord', 'output_name'])):
     def to_bf(self, declaration_mapper, stack_index):
-        pos = declaration_mapper[self.output_name]
+        pos = declaration_mapper[self.output_name].position
         return self.format_bf('{}>.{}<', pos, pos)
 
 
@@ -189,7 +190,7 @@ class PrintString(commandtuple('PrintString', ['coord', 'output_name'])):
 class SetAddressableValue(commandtuple('SetAddressableValue', ['coord', 'base_name', 'offset_name', 'rvalue_name'])):
     def to_bf(self, declaration_mapper, stack_index):
         base_pos = addressable_offset(declaration_mapper, self.base_name)
-        rvalue_pos = declaration_mapper[self.rvalue_name] + TapeIndices.START_STACK
+        rvalue_pos = declaration_mapper[self.rvalue_name].position + TapeIndices.START_STACK
         start_addressable_memory_distance = TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK
         copy_offset_command = Copy(coord=self.coord, from_name=self.offset_name, to_name=start_addressable_memory_distance)
         go_mem_command = GoMem(coord=self.coord, base_name=self.base_name, offset_name=self.offset_name)
@@ -206,7 +207,7 @@ class GetAddressableValue(commandtuple('GetAddressableValue', ['coord', 'base_na
     def to_bf(self, declaration_mapper, stack_index):
         staging_pos = stack_index + TapeIndices.START_STACK
         base_pos = addressable_offset(declaration_mapper, self.base_name)
-        result_pos = declaration_mapper[self.result_name] + TapeIndices.START_STACK
+        result_pos = declaration_mapper[self.result_name].position + TapeIndices.START_STACK
         start_addressable_memory_distance = TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK
         copy_offset_command = Copy(coord=self.coord, from_name=self.offset_name, to_name=start_addressable_memory_distance)
         go_mem_command = GoMem(coord=self.coord, base_name=self.base_name, offset_name=self.offset_name)
@@ -223,7 +224,7 @@ class GetAddressableValue(commandtuple('GetAddressableValue', ['coord', 'base_na
 
 class Input(commandtuple('Input', ['coord', 'input_name'])):
     def to_bf(self, declaration_mapper, stack_index):
-        pos = declaration_mapper[self.input_name]
+        pos = declaration_mapper[self.input_name].position
         return self.format_bf('{} {}>,{}<', pos, pos)
 
 

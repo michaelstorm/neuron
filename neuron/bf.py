@@ -113,10 +113,16 @@ class BrainfuckRuntime:
         max_declaration_length = max([0] + [len(name) for name in self.declaration_mapper.positions])
         reversed_declarations = {value: key for (key, value) in self.declaration_mapper.positions.items()}
 
-        for position in sorted(reversed_declarations.keys()):
-            padded_name = (reversed_declarations[position] + ':').ljust(max_declaration_length+2)
-            tape_position = TapeIndices.START_STACK + position
-            value = self.tape[tape_position]
+        for mapped_declaration in sorted(reversed_declarations.keys(), key=lambda d: d.position):
+            padded_name = (reversed_declarations[mapped_declaration] + ':').ljust(max_declaration_length+2)
+            tape_position = TapeIndices.START_STACK + mapped_declaration.position
+
+            size = mapped_declaration.declaration.size
+            if size == 1:
+                value = self.tape[tape_position]
+            else:
+                value = '{{{}}}'.format(', '.join([str(self.tape[tape_position + 3*i]) for i in range(size)]))
+
             line = '{}{}{}'.format('[{}] '.format(tape_position).rjust(5), padded_name, value)
             if self.pointer == tape_position:
                 line = colored_text_background(BackgroundColor.LIGHT_MAGENTA, TextColor.BLACK, line)

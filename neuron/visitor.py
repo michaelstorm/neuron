@@ -62,6 +62,16 @@ class IfBlock:
         return self.__str__()
 
 
+def parse_array_ref(array_ref):
+    ar = array_ref
+    subscripts = []
+    while type(ar) == c_ast.ArrayRef:
+        subscripts.append(ar.subscript)
+        ar = ar.name
+
+    return ar.name, subscripts
+
+
 class Declaration(namedtuple('Declaration', ['kind', 'name'])):
     @staticmethod
     def get_decl_size(decl):
@@ -78,14 +88,8 @@ class Declaration(namedtuple('Declaration', ['kind', 'name'])):
             return 1
 
 
-def parse_array_ref(array_ref):
-    ar = array_ref
-    subscripts = []
-    while type(ar) == c_ast.ArrayRef:
-        subscripts.append(ar.subscript)
-        ar = ar.name
-
-    return ar.name, subscripts
+class MappedDeclaration(namedtuple('MappedDeclaration', ['declaration', 'position'])):
+    pass
 
 
 class DeclarationMapper:
@@ -93,21 +97,23 @@ class DeclarationMapper:
         self.positions = {}
         position_offset = 0
         for decl in filter(lambda decl: '~' in decl.name, declarations):
-            self.positions[decl.name] = position_offset
+            position = position_offset
+            self.positions[decl.name] = MappedDeclaration(declaration=decl, position=position)
             position_offset += decl.size
 
         self.stack_size = position_offset
 
         position_offset = 0
         for decl in filter(lambda decl: '~' not in decl.name, declarations):
-            self.positions[decl.name] = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + position_offset * 3 + 2
+            position = (TapeIndices.START_LVALUES - TapeIndices.START_STACK) + position_offset * 3 + 2
+            self.positions[decl.name] = MappedDeclaration(declaration=decl, position=position)
             position_offset += decl.size
 
         self.total_size = position_offset
 
     def __getitem__(self, lvalue):
         if type(lvalue) == int:
-            return lvalue
+            return MappedDeclaration(declaration=Declaration(kind=None, name=None), position=lvalue)
         elif type(lvalue) == str:
             return self.positions[lvalue]
         elif type(lvalue) == c_ast.ID:
@@ -546,10 +552,10 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
         static_data_size = sum([len(data) for data in self.static_data]) + len(self.static_data)
         addressable_memory_size = TapeIndices.LVALUES_COUNT + static_data_size
-        output = format_bf('AddressableSetup', None, '{}4>{}{}4<'.format(
-            bf_travel(TapeIndices.START, TapeIndices.START_ADDRESSABLE_MEMORY),
+        output = format_bf('AddressableSetup', None, '{}{}{}<'.format(
+            bf_travel(TapeIndices.START, TapeIndices.START_ADDRESSABLE_MEMORY + 4),
             '+3>' * addressable_memory_size,
-            '3<' * addressable_memory_size
+            str(3 * addressable_memory_size + 4)
         ))
 
         print('static_data:', self.static_data)
@@ -570,7 +576,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             bf_travel(TapeIndices.START, TapeIndices.STOP_INDICATOR_INDEX),
             bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.IP_INDEX))
 
-        output += format_bf('IPSetup', None, '{}+ 3>+>+ 4<'.format(start_ip))
+        output += format_bf('IPSetup', None, '!{}+ 3>+>+ 4<'.format(start_ip))
         output += '{} [{}'.format(
             bf_travel(TapeIndices.IP_INDEX, TapeIndices.STOP_INDICATOR_INDEX),
             bf_travel(TapeIndices.STOP_INDICATOR_INDEX, TapeIndices.FIRST_KNOWN_ZERO))
