@@ -34,12 +34,17 @@ def format_bf(name, attrs_object, *bf):
                                   colored_text(TextColor.LIGHT_YELLOW, getattr(attrs_object, name)))
                   for name in attrs_object._fields if name != 'coord']
 
-    return '{}{} {}{}{} {}{}'.format(
+    formatted_fields = ''
+    if len(fields) > 0:
+        formatted_fields = ' {}{}{}'.format(
+            colored_text(TextColor.LIGHT_GRAY, '{'),
+            ', '.join(fields) if len(fields) > 0 else '',
+            colored_text(TextColor.LIGHT_GRAY, '}'))
+
+    return '{}{}{} {}{}'.format(
         bf_start_paren,
         format_bf_name(name),
-        colored_text(TextColor.LIGHT_GRAY, '{'),
-        ', '.join(fields) if len(fields) > 0 else '',
-        colored_text(TextColor.LIGHT_GRAY, '}'),
+        formatted_fields,
         bf[0].format(*bf[1:]),
         bf_end_paren)
 

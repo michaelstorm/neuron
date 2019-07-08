@@ -85,7 +85,7 @@ def parse_array_ref(array_ref):
         subscripts.append(ar.subscript)
         ar = ar.name
 
-        return ar.name, subscripts
+    return ar.name, subscripts
 
 
 class DeclarationMapper:

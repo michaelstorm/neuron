@@ -1,4 +1,4 @@
-from .console import BackgroundColor, TextColor, colored_text_background
+from .console import BackgroundColor, TextColor,bold_text, colored_text_background
 from .visitor import TapeIndices
 from pprint import pprint
 import re
@@ -14,6 +14,8 @@ class BrainfuckRuntime:
         self.static_data = static_data
         self.symbol_table = symbol_table
         self.declaration_mapper = declaration_mapper
+        self.modified_indices = []
+        self.breakpoints = []
 
     def print_source(self, op_start_index):
         source_line_index = None
@@ -31,11 +33,35 @@ class BrainfuckRuntime:
                 print(line)
 
     def print_bf(self, instr_count, op_start_index, op_end_index, code):
-        colored_code = "{}{}{}".format(
-            code[:op_start_index],
-            colored_text_background(BackgroundColor.LIGHT_CYAN, TextColor.BLACK,
-                                    code[op_start_index:op_end_index+1]),
-            code[op_end_index+1:])
+        colored_code = ''
+
+        frame_points = [(op_start_index, op_end_index)] + self.breakpoints + [(i, i) for i, c in enumerate(code) if c == '!']
+        frame_points.sort(key=lambda t: t[0])
+
+        end = 0
+        fp_index = 0
+        while end < len(code) and fp_index < len(frame_points):
+            fp = frame_points[fp_index]
+            colored_code += code[end:fp[0]]
+
+            for i, c in enumerate(code[max(end, fp[0]):fp[1]+1]):
+                index = i + fp[0]
+                is_breakpoint = c == '!' or self.index_in_breakpoint(index)
+
+                if index >= op_start_index and index <= op_end_index:
+                    colored_char = colored_text_background(BackgroundColor.LIGHT_CYAN, TextColor.BLACK, c)
+                    if is_breakpoint:
+                        colored_char = bold_text(colored_char)
+                    colored_code += colored_char
+                elif is_breakpoint:
+                    colored_code += colored_text_background(100, TextColor.DEFAULT, c)
+                else:
+                    colored_code += c
+
+            end = max(end, fp[1] + 1)
+            fp_index += 1
+
+        colored_code += code[end:]
 
         code_line_prefix = ' ' * (len(str(instr_count)) + 2)
         code_lines = ('\n' + code_line_prefix).join(colored_code.split('\n'))
@@ -61,6 +87,9 @@ class BrainfuckRuntime:
 
             if value_index == self.pointer:
                 colored_tape += colored_text_background(BackgroundColor.LIGHT_MAGENTA,
+                                                        TextColor.BLACK, value)
+            elif value_index in self.modified_indices:
+                colored_tape += colored_text_background(BackgroundColor.LIGHT_GREEN,
                                                         TextColor.BLACK, value)
             else:
                 colored_tape += str(value)
@@ -121,11 +150,16 @@ class BrainfuckRuntime:
         tape_position = TapeIndices.START_STACK + position + offset * 3 + 2
         return self.tape[tape_position]
 
+    def index_in_breakpoint(self, index):
+        return any([index >= b_start_index and index <= b_end_index for b_start_index, b_end_index in self.breakpoints])
+
     def execute(self, code, debug=False):
         index = 0
         instr_count = 0
-        last_op = None
-        step_through = False
+        step_into = False
+        step_over = False
+        step_over_start = None
+        prompt_once = False
         comment = False
         color_code = False
         number = None
@@ -149,7 +183,8 @@ class BrainfuckRuntime:
                 color_code = False
             elif not comment and not color_code:
                 if op == '!' and not skip_breakpoints:
-                    step_through = True
+                    step_into = True
+                    op_start_index = index + 1
 
                 elif ord(op) in range(ord('0'), ord('9') + 1):
                     digit = ord(op) - ord('0')
@@ -159,36 +194,69 @@ class BrainfuckRuntime:
                         number = number*10 + digit
 
                 elif op in ('+', '-', '>', '<', '.', ',', '[', ']'):
-                    if op != last_op:
+                    get_input_line = ((step_into or step_over) and step_over_start == None) or self.index_in_breakpoint(index) or prompt_once
+
+                    if get_input_line:
                         if debug:
                             self.print_state(instr_count, op_start_index, index, code)
 
-                        if step_through:
-                            line = input()
-                            if len(line) == 0:
-                                line = previous_input_line
+                        prompt_once = False
+                        line = input()
+                        if len(line) == 0:
+                            line = previous_input_line
+                        previous_input_line = line
 
-                            command = line[0]
-                            if line == 'c':
-                                step_through = False
-                            elif line == 'q':
-                                sys.exit(0)
-                            elif line == 'f':
-                                step_through = False
+                        command = line[0] if len(line) > 0 else ''
+                        if len(command) > 0 and command in 'csnr': # the empty string is a substring of any string
+                            self.modified_indices = []
+
+                            step_into = False
+                            step_over = False
+                            if command == 'c':
+                                pass
+                            elif command == 's':
+                                step_into = True
+                            elif command == 'n':
+                                step_over = True
+                            elif command == 'r':
                                 skip_breakpoints = True
+                            else:
+                                raise Exception('Accidentally captured command {}'.format(command))
 
-                            previous_input_line = line
+                        elif command == 'b':
+                            breakpoint = (op_start_index, index)
+                            if self.index_in_breakpoint(index):
+                                self.breakpoints.remove(breakpoint)
+                            else:
+                                self.breakpoints.append(breakpoint)
+
+                            prompt_once = True
+                            continue
+
+                        elif command == 'q':
+                            sys.exit(0)
+
+                        else:
+                            prompt_once = True
+                            continue
 
                     count = 1 if number is None else number
                     for i in range(count):
                         if op == '+':
                             self.tape[self.pointer] += 1
+                            if not get_input_line:
+                                self.modified_indices.append(self.pointer)
+
                         elif op == '-':
                             self.tape[self.pointer] -= 1
+                            if not get_input_line:
+                                self.modified_indices.append(self.pointer)
+
                         elif op == '>':
                             self.pointer += 1
                             if self.pointer == len(self.tape):
                                 self.tape.append(0)
+
                         elif op == '<':
                             self.pointer -= 1
 
@@ -205,8 +273,10 @@ class BrainfuckRuntime:
                             self.tape[self.pointer] = ord(line[0])
 
                         elif op == '[':
-                            last_op = None
                             if self.tape[self.pointer] == 0:
+                                if step_over_start == index:
+                                    step_over_start = None
+
                                 stack = 1
                                 while stack > 0:
                                     index += 1
@@ -215,8 +285,10 @@ class BrainfuckRuntime:
                                     elif code[index] == ']':
                                         stack -= 1
 
+                            elif step_over and step_over_start == None:
+                                step_over_start = index
+
                         elif op == ']':
-                            last_op = None
                             stack = 1
                             while stack > 0:
                                 index -= 1
@@ -233,8 +305,6 @@ class BrainfuckRuntime:
 
                 else:
                     op_start_index = index + 1
-
-                last_op = op
 
             index += 1
 
