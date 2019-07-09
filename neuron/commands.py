@@ -189,10 +189,7 @@ class PrintString(commandtuple('PrintString', ['coord', 'output_name'])):
 
 class SetAddressableValue(commandtuple('SetAddressableValue', ['coord', 'base_name', 'offset_name', 'rvalue_name'])):
     def to_bf(self, declaration_mapper, stack_index):
-        base_pos = addressable_offset(declaration_mapper, self.base_name)
         rvalue_pos = declaration_mapper[self.rvalue_name].position + TapeIndices.START_STACK
-        start_addressable_memory_distance = TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK
-        copy_offset_command = Copy(coord=self.coord, from_name=self.offset_name, to_name=start_addressable_memory_distance)
         go_mem_command = GoMem(coord=self.coord, base_name=self.base_name, offset_name=self.offset_name)
 
         return self.format_bf('{}[-{}{} + <[3<]< {}] {}',
@@ -205,21 +202,21 @@ class SetAddressableValue(commandtuple('SetAddressableValue', ['coord', 'base_na
 
 class GetAddressableValue(commandtuple('GetAddressableValue', ['coord', 'base_name', 'offset_name', 'result_name'])):
     def to_bf(self, declaration_mapper, stack_index):
-        staging_pos = stack_index + TapeIndices.START_STACK
-        base_pos = addressable_offset(declaration_mapper, self.base_name)
-        result_pos = declaration_mapper[self.result_name].position + TapeIndices.START_STACK
-        start_addressable_memory_distance = TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK
-        copy_offset_command = Copy(coord=self.coord, from_name=self.offset_name, to_name=start_addressable_memory_distance)
+        staging_pos = stack_index
+        result_pos = declaration_mapper[self.result_name].position
         go_mem_command = GoMem(coord=self.coord, base_name=self.base_name, offset_name=self.offset_name)
         back_mem_command = BackMem(coord=self.coord)
+        set_value_command = SetAddressableValue(coord=self.coord, base_name=self.base_name,
+                                                offset_name=self.offset_name, rvalue_name=staging_pos)
 
-        return self.format_bf('!{} ![- <[3<]< {}+ {}+ {}{}] {}',
+        return self.format_bf('!{} ![- <[3<]< {}+ {}+ {}{}] !{} {}',
             go_mem_command.to_bf(declaration_mapper, stack_index + 2),
-            bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY, staging_pos),
+            bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK, staging_pos),
             bf_travel(staging_pos, result_pos),
             bf_travel(result_pos, TapeIndices.START_STACK),
             go_mem_command.to_bf(declaration_mapper, stack_index + 3),
-            back_mem_command.to_bf(declaration_mapper, stack_index + 3))
+            back_mem_command.to_bf(declaration_mapper, stack_index + 3),
+            set_value_command.to_bf(declaration_mapper, stack_index + 3))
 
 
 class Input(commandtuple('Input', ['coord', 'input_name'])):
