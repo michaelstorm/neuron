@@ -158,46 +158,6 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.level -= 1
         return result
 
-    def visit_assignment_body(self, coord, result_node, assignment_body):
-        ops = []
-
-        if hasattr(result_node, 'lvalue') and type(result_node.lvalue) == c_ast.ArrayRef:
-            base_name, subscripts = parse_array_ref(result_node.lvalue)
-
-            subscript_name = '{}~sub~0'.format(base_name)
-            self.push_decl(subscript_name)
-
-            ops += list(self.visit_child(subscripts[0]))
-
-            rvalue_name = '{}~rvalue~0'.format(base_name)
-            self.push_decl(rvalue_name)
-
-            ops += list(self.visit_child(result_node.rvalue))
-            ops += [SetAddressableValue(coord=coord, base_name=base_name, offset_name=subscript_name, rvalue_name=rvalue_name)]
-
-            self.pop_decl()
-            self.pop_decl()
-
-        else:
-            if type(result_node) == str:
-                result = result_node
-            elif type(result_node.lvalue) == c_ast.ID:
-                result = result_node.lvalue.name
-            else:
-                raise Exception('Unsupported type %s', type(result_node.lvalue))
-
-            decl_name = self.push_decl_mod(result)
-
-            ops += list(self.visit_child(assignment_body))
-            ops += [
-                Zero(coord=coord, name=result),
-                Move(coord=coord, from_name=decl_name, to_name=result)
-            ]
-
-            self.pop_decl()
-
-        return ops
-
     def generic_visit(self, node):
         self.lprint(node.__class__.__name__)
         return self.visit_children(node)
@@ -239,6 +199,46 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
 
     def pop_decl(self):
         self.decl_name_stack.pop()
+
+    def visit_assignment_body(self, coord, result_node, assignment_body):
+        ops = []
+
+        if hasattr(result_node, 'lvalue') and type(result_node.lvalue) == c_ast.ArrayRef:
+            base_name, subscripts = parse_array_ref(result_node.lvalue)
+
+            subscript_name = '{}~sub~0'.format(base_name)
+            self.push_decl(subscript_name)
+
+            ops += list(self.visit_child(subscripts[0]))
+
+            rvalue_name = '{}~rvalue~0'.format(base_name)
+            self.push_decl(rvalue_name)
+
+            ops += list(self.visit_child(result_node.rvalue))
+            ops += [SetAddressableValue(coord=coord, base_name=base_name, offset_name=subscript_name, rvalue_name=rvalue_name)]
+
+            self.pop_decl()
+            self.pop_decl()
+
+        else:
+            if type(result_node) == str:
+                result = result_node
+            elif type(result_node.lvalue) == c_ast.ID:
+                result = result_node.lvalue.name
+            else:
+                raise Exception('Unsupported type %s', type(result_node.lvalue))
+
+            decl_name = self.push_decl_mod(result)
+
+            ops += list(self.visit_child(assignment_body))
+            ops += [
+                Zero(coord=coord, name=result),
+                Move(coord=coord, from_name=decl_name, to_name=result)
+            ]
+
+            self.pop_decl()
+
+        return ops
 
     def visit_Assignment(self, node):
         self.lprint(node.__class__.__name__, node.coord)
