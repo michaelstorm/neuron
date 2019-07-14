@@ -16,6 +16,7 @@ class TextColor:
 class BackgroundColor:
     DEFAULT = 49
     RED = 41
+    DARK_GRAY = 100
     LIGHT_GREEN = 102
     LIGHT_MAGENTA = 105
     LIGHT_CYAN = 106

@@ -46,9 +46,12 @@ class BrainfuckRuntime:
     def print_bf(self, state, code):
         frame_points = [(state.op_start_index, state.index)] + self.breakpoints + [(i, i) for i, c in enumerate(code) if c == '!']
 
-        opening_bracket_index = self.get_opening_bracket_index(code, state.index)
-        closing_bracket_index = self.get_closing_bracket_index(code, state.index)
-        matching_bracket_indexes = [opening_bracket_index, closing_bracket_index]
+        matching_bracket_indexes = []
+        if code[state.index] != '[':
+            matching_bracket_indexes.append(self.get_opening_bracket_index(code, state.index))
+        if code[state.index] != ']':
+            matching_bracket_indexes.append(self.get_closing_bracket_index(code, state.index))
+
         for bi in matching_bracket_indexes:
             if bi != None:
                 frame_points.append((bi, bi))
@@ -72,7 +75,7 @@ class BrainfuckRuntime:
                         colored_char = bold_text(colored_char)
                     colored_code += colored_char
                 elif is_breakpoint:
-                    colored_code += colored_text_background(100, TextColor.DEFAULT, c)
+                    colored_code += colored_text_background(BackgroundColor.DARK_GRAY, TextColor.DEFAULT, c)
                 elif index in matching_bracket_indexes:
                     colored_code += colored_text(TextColor.LIGHT_CYAN, bold_text(c))
                 else:
