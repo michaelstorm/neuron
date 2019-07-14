@@ -1,4 +1,4 @@
-from .console import BackgroundColor, TextColor,bold_text, colored_text_background
+from .console import BackgroundColor, TextColor, bold_text, colored_text, colored_text_background
 from .visitor import TapeIndices
 
 from collections import namedtuple
@@ -44,13 +44,20 @@ class BrainfuckRuntime:
                 print(line)
 
     def print_bf(self, state, code):
-        colored_code = ''
-
         frame_points = [(state.op_start_index, state.index)] + self.breakpoints + [(i, i) for i, c in enumerate(code) if c == '!']
+
+        opening_bracket_index = self.get_opening_bracket_index(code, state.index)
+        closing_bracket_index = self.get_closing_bracket_index(code, state.index)
+        matching_bracket_indexes = [opening_bracket_index, closing_bracket_index]
+        for bi in matching_bracket_indexes:
+            if bi != None:
+                frame_points.append((bi, bi))
+
         frame_points.sort(key=lambda t: t[0])
 
         end = 0
         fp_index = 0
+        colored_code = ''
         while end < len(code) and fp_index < len(frame_points):
             fp = frame_points[fp_index]
             colored_code += code[end:fp[0]]
@@ -66,6 +73,8 @@ class BrainfuckRuntime:
                     colored_code += colored_char
                 elif is_breakpoint:
                     colored_code += colored_text_background(100, TextColor.DEFAULT, c)
+                elif index in matching_bracket_indexes:
+                    colored_code += colored_text(TextColor.LIGHT_CYAN, bold_text(c))
                 else:
                     colored_code += c
 
@@ -169,6 +178,34 @@ class BrainfuckRuntime:
 
     def index_in_breakpoint(self, index):
         return any([index >= b_start_index and index <= b_end_index for b_start_index, b_end_index in self.breakpoints])
+
+    def get_closing_bracket_index(self, code, index):
+        stack = 1
+        while stack > 0:
+            index += 1
+            if index >= len(code):
+                return None
+
+            if code[index] == '[' and (index == 0 or code[index-1] != '\033'):
+                stack += 1
+            elif code[index] == ']':
+                stack -= 1
+
+        return index
+
+    def get_opening_bracket_index(self, code, index):
+        stack = 1
+        while stack > 0:
+            index -= 1
+            if index <= 0:
+                return None
+
+            if code[index] == '[' and (index == 0 or code[index-1] != '\033'):
+                stack -= 1
+            elif code[index] == ']':
+                stack += 1
+
+        return index
 
     def execute(self, code, debug=False):
         step_into = False
@@ -310,27 +347,13 @@ class BrainfuckRuntime:
                                 if step_over_start == state.index:
                                     step_over_start = None
 
-                                stack = 1
-                                while stack > 0:
-                                    state.index += 1
-                                    if code[state.index] == '[' and code[state.index-1] != '\033':
-                                        stack += 1
-                                    elif code[state.index] == ']':
-                                        stack -= 1
+                                state.index = self.get_closing_bracket_index(code, state.index)
 
                             elif step_over and step_over_start == None:
                                 step_over_start = state.index
 
                         elif op == ']':
-                            stack = 1
-                            while stack > 0:
-                                state.index -= 1
-                                if code[state.index] == '[' and (state.index == 0 or code[state.index-1] != '\033'):
-                                    stack -= 1
-                                elif code[state.index] == ']':
-                                    stack += 1
-
-                            state.index -= 1
+                            state.index = self.get_opening_bracket_index(code, state.index) - 1
 
                     state.instr_count += 1
                     state.number = None
