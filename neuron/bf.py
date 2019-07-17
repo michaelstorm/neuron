@@ -47,10 +47,13 @@ class BrainfuckRuntime:
         frame_points = [(state.op_start_index, state.index)] + self.breakpoints + [(i, i) for i, c in enumerate(code) if c == '!']
 
         matching_bracket_indexes = []
-        if code[state.index] != '[':
-            matching_bracket_indexes.append(self.get_opening_bracket_index(code, state.index))
-        if code[state.index] != ']':
-            matching_bracket_indexes.append(self.get_closing_bracket_index(code, state.index))
+        # index can point past code when we print the final state, just after executing the last
+        # instruction
+        if state.index < len(code):
+            if code[state.index] != '[':
+                matching_bracket_indexes.append(self.get_opening_bracket_index(code, state.index))
+            if code[state.index] != ']':
+                matching_bracket_indexes.append(self.get_closing_bracket_index(code, state.index))
 
         for bi in matching_bracket_indexes:
             if bi != None:
@@ -170,13 +173,13 @@ class BrainfuckRuntime:
         self.print_output(state)
 
     def get_declaration_value(self, declaration_name):
-        position = self.declaration_mapper[declaration_name]
-        tape_position = TapeIndices.START_STACK + position
+        declaration = self.declaration_mapper[declaration_name]
+        tape_position = TapeIndices.START_STACK + declaration.position
         return self.states[0].tape[tape_position]
 
     def get_array_value(self, declaration_name, offset):
-        position = self.declaration_mapper[declaration_name]
-        tape_position = TapeIndices.START_STACK + position + offset * 3 + 2
+        declaration = self.declaration_mapper[declaration_name]
+        tape_position = TapeIndices.START_STACK + declaration.position + offset * 3 + 2
         return self.states[0].tape[tape_position]
 
     def index_in_breakpoint(self, index):
