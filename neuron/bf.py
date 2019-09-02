@@ -100,16 +100,24 @@ class BrainfuckRuntime:
                          ('lvalues', [TapeIndices.START_LVALUES, TapeIndices.END_LVALUES]),
                          ('static', [TapeIndices.START_STATIC_SEGMENT, len(self.states[0].tape) - 1])]
 
+        lvalue_offsets = []
+        mark_offsets = []
         prefix = ' ' * len(str(state.instr_count)) + '  '
         colored_tape = ''
         offset = 1
         section_names = []
-        for (value_index, value) in enumerate(state.tape):
+        for value_index, value in enumerate(state.tape):
             start_sections = {section[1][0]: section[0] for section in tape_sections}
             if value_index in start_sections:
                 section_names.append([start_sections[value_index], offset])
                 colored_tape += '['
                 offset += 1
+
+            if value_index >= TapeIndices.START_LVALUES:
+                lvalue_offsets.append(offset - 1)
+
+            if value_index % 10 == 0:
+                mark_offsets.append(offset - 1)
 
             if value_index == state.pointer:
                 colored_tape += colored_text_background(BackgroundColor.LIGHT_MAGENTA,
@@ -127,11 +135,30 @@ class BrainfuckRuntime:
             colored_tape += ' '
             offset += 2
 
+        mark_line = ''
+        for mark_index, offset in enumerate(mark_offsets):
+            mark_line = mark_line.ljust(offset) + 'v'
+
+        lvalue_line = ''
+        for lvalue_index, offset in enumerate(lvalue_offsets):
+            c = ''
+            pointer_dist = state.pointer - TapeIndices.START_LVALUES
+            if lvalue_index - (lvalue_index % 3) == pointer_dist - (pointer_dist % 3):
+                if lvalue_index % 3 == 0:
+                    c = '#'
+                elif lvalue_index % 3 == 1:
+                    c = '?'
+                elif lvalue_index % 3 == 2:
+                    c = '^'
+            lvalue_line = lvalue_line.ljust(offset) + c
+
         section_line = ''
         for section_name in section_names:
             section_line = section_line.ljust(section_name[1]) + section_name[0]
 
+        print(prefix + ' ' * 5 + mark_line)
         print('{}{}{}'.format(prefix, '({}) '.format(self.states[0].pointer).ljust(5), colored_tape))
+        print(prefix + ' ' * 5 + lvalue_line)
         print(prefix + ' ' * 5 + section_line + '\n')
 
     def print_variables(self, state):
@@ -164,8 +191,6 @@ class BrainfuckRuntime:
         print()
 
         self.print_bf(state, code)
-        print()
-
         self.print_tape(state)
         self.print_variables(state)
         print()
