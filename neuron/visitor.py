@@ -619,7 +619,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
                 true_ip = ip_offset(block.index, block.true_blocks[0])
                 false_ip = ip_offset(block.index, block.false_blocks[0])
 
-                cond_result_pos = TapeIndices.START_STACK + declaration_mapper[block.decl_name]
+                cond_result_pos = TapeIndices.START_STACK + declaration_mapper[block.decl_name].position
 
                 def bf_set_ip(new_ip):
                     return '{}{}+{}'.format(

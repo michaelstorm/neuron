@@ -204,7 +204,7 @@ class BrainfuckRuntime:
 
     def get_array_value(self, declaration_name, offset):
         declaration = self.declaration_mapper[declaration_name]
-        tape_position = TapeIndices.START_STACK + declaration.position + offset * 3 + 2
+        tape_position = TapeIndices.START_STACK + declaration.position + offset * 3
         return self.states[0].tape[tape_position]
 
     def index_in_breakpoint(self, index):
