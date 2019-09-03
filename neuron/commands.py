@@ -213,7 +213,7 @@ class GetAddressableValue(commandtuple('GetAddressableValue', ['coord', 'base_na
             go_mem_command.to_bf(declaration_mapper, stack_index + 2),
             bf_travel(TapeIndices.START_ADDRESSABLE_MEMORY - TapeIndices.START_STACK, staging_pos),
             bf_travel(staging_pos, result_pos),
-            bf_travel(result_pos, TapeIndices.START_STACK),
+            bf_travel(result_pos, 0),
             go_mem_command.to_bf(declaration_mapper, stack_index + 3),
             back_mem_command.to_bf(declaration_mapper, stack_index + 3),
             set_value_command.to_bf(declaration_mapper, stack_index + 3))

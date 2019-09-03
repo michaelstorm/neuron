@@ -1,10 +1,8 @@
 int main()
 {
-	char a;
-	char b;
-	char y[2];
-	y[1] = 4;
-	b = y[1];
-	// char *c = "abc";
-	// puts(c);
+    char a;
+    char b;
+    char c[2];
+    c[1] = 4;
+    b = c[1];
 }
