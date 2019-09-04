@@ -28,7 +28,7 @@ class VisitorTest(TestCase):
         }
         """
 
-        code, symbol_table, blocks, visitor, runtime = self.execute_code(source)
+        _, _, blocks, visitor, _ = self.execute_code(source)
 
         self.assertEqual(set(['x', 'x~0', 'y']), set([d.name for d in visitor.declarations]))
 
@@ -42,6 +42,23 @@ class VisitorTest(TestCase):
         self.assertEqual(SetValue(name='x~0', value='2', type='int', coord=':4'), main[0].ops[0])
         self.assertEqual(Zero(name='x', coord=':4'), main[0].ops[1])
         self.assertEqual(Move(from_name='x~0', to_name='x', coord=':4'), main[0].ops[2])
+
+    def test_math(self):
+        source = "int main() { int x; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(2, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 * 3; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(6, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 * 3 + 5; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(11, runtime.get_declaration_value('x'))
 
     def test_if(self):
         source = """
@@ -60,7 +77,7 @@ class VisitorTest(TestCase):
         }
         """
 
-        code, symbol_table, blocks, visitor, runtime = self.execute_code(source)
+        *_, visitor, runtime = self.execute_code(source)
 
         self.assertEqual(set(['x', 'x~0', 'y', 'y~0', 'if', 'if~0', 'y~1', 'if~1', 'y~2']),
                          set([d.name for d in visitor.declarations]))
@@ -73,18 +90,10 @@ class VisitorTest(TestCase):
         int main()
         {
             int y;
-            if (3) {
-                y = 1;
-            }
-            else if (1) {
-                y = 2;
-            }
-            else if (0) {
-                y = 3;
-            }
-            else {
-                y = 4;
-            }
+            if (3) { y = 1; }
+            else if (1) { y = 2; }
+            else if (0) { y = 3; }
+            else { y = 4; }
         }
         """
 
@@ -95,18 +104,10 @@ class VisitorTest(TestCase):
         int main()
         {
             int y;
-            if (0) {
-                y = 1;
-            }
-            else if (1) {
-                y = 2;
-            }
-            else if (0) {
-                y = 3;
-            }
-            else {
-                y = 4;
-            }
+            if (0) { y = 1; }
+            else if (1) { y = 2; }
+            else if (0) { y = 3; }
+            else { y = 4; }
         }
         """
 
@@ -117,18 +118,10 @@ class VisitorTest(TestCase):
         int main()
         {
             int y;
-            if (0) {
-                y = 1;
-            }
-            else if (0) {
-                y = 2;
-            }
-            else if (0) {
-                y = 3;
-            }
-            else {
-                y = 4;
-            }
+            if (0) { y = 1; }
+            else if (0) { y = 2; }
+            else if (0) { y = 3; }
+            else { y = 4; }
         }
         """
 
@@ -147,10 +140,26 @@ class VisitorTest(TestCase):
         }
         """
 
-        code, symbol_table, blocks, visitor, runtime = self.execute_code(source)
+        *_, visitor, runtime = self.execute_code(source)
 
         self.assertEqual(set(['a', 'b', 'c', 'c~0', 'c~sub~0', 'c~rvalue~0']),
                          set([d.name for d in visitor.declarations]))
 
         self.assertEqual(4, runtime.get_declaration_value('b'))
         self.assertEqual(4, runtime.get_array_value('c', 1))
+
+    def test_string(self):
+        source = """
+        int main()
+        {
+            char a = "abc";
+            puts(a);
+        }
+        """
+
+        *_, visitor, runtime = self.execute_code(source)
+
+        self.assertEqual(set(['a', 'a~0', 'puts~arg~0', 'puts~arg~0~0']),
+                         set([d.name for d in visitor.declarations]))
+
+        self.assertEqual("abc", runtime.states[0].output)

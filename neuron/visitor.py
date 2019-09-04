@@ -249,7 +249,8 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
     def visit_InitList(self, node):
         self.lprint(node.__class__.__name__, node.coord)
 
-        return self.visit_assignment_body(str(node.coord), node, node.rvalue)
+        return [SetArrayValues(coord=str(node.coord), name=self.decl_name_stack[-1].name, values=[e.value for e in node.exprs],
+                               type=node.exprs[0].type)]
 
     def visit_ArrayRef(self, node):
         self.lprint(node.__class__.__name__, node.coord)

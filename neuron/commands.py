@@ -123,8 +123,8 @@ class Zero(commandtuple('Zero', ['coord', 'name'])):
 
 class Add(commandtuple('Add', ['coord', 'result_name', 'first_name', 'second_name'])):
     def to_bf(self, declaration_mapper, stack_index):
-        first_move = Move(from_name=self.first_name, to_name=self.result_name)
-        second_move = Move(from_name=self.second_name, to_name=self.result_name)
+        first_move = Move(coord=self.coord, from_name=self.first_name, to_name=self.result_name)
+        second_move = Move(coord=self.coord, from_name=self.second_name, to_name=self.result_name)
         return self.format_bf('{}{}',
             first_move.to_bf(declaration_mapper, stack_index + 1),
             second_move.to_bf(declaration_mapper, stack_index + 1))
@@ -135,7 +135,7 @@ class Multiply(commandtuple('Multiply', ['coord', 'result_name', 'first_name', '
         first_pos = declaration_mapper[self.first_name].position
         second_pos = declaration_mapper[self.second_name].position
 
-        copy_command = Copy(from_name=self.second_name, to_name=self.result_name)
+        copy_command = Copy(coord=self.coord, from_name=self.second_name, to_name=self.result_name)
 
         return self.format_bf('{}>[-{}<{}{}>]{}<', first_pos, first_pos,
             copy_command.to_bf(declaration_mapper, stack_index + 1), first_pos, first_pos)
@@ -183,7 +183,7 @@ class PrintString(commandtuple('PrintString', ['coord', 'output_name'])):
         return self.format_bf('!{}{} {} [.3>] {}',
             copy_command.to_bf(declaration_mapper, stack_index + 1),
             bf_travel(TapeIndices.START_STACK, TapeIndices.START_ADDRESSABLE_MEMORY),
-            ForwardMem(coord=coord).to_bf(declaration_mapper, stack_index + 3),
+            ForwardMem(coord=self.coord).to_bf(declaration_mapper, stack_index + 3),
             back_mem_command.to_bf(declaration_mapper, stack_index + 1))
 
 
