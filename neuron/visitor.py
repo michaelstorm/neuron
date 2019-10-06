@@ -203,6 +203,8 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
     def visit_assignment_body(self, coord, result_node, assignment_body):
         ops = []
 
+        # if we're assigning to an array element, we need to use SetAddressableValue(), since the
+        # subscript could be determined at runtime
         if hasattr(result_node, 'lvalue') and type(result_node.lvalue) == c_ast.ArrayRef:
             base_name, subscripts = parse_array_ref(result_node.lvalue)
 
@@ -220,6 +222,7 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             self.pop_decl()
             self.pop_decl()
 
+        # otherwise, we can simply assign to the variable's static location
         else:
             if type(result_node) == str:
                 result = result_node
@@ -228,15 +231,18 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
             else:
                 raise Exception('Unsupported type %s', type(result_node.lvalue))
 
-            decl_name = self.push_decl_mod(result)
+            if type(assignment_body) == c_ast.InitList:
+                ops += list(self.visit_child(assignment_body))
+            else:
+                decl_name = self.push_decl_mod(result)
 
-            ops += list(self.visit_child(assignment_body))
-            ops += [
-                Zero(coord=coord, name=result),
-                Move(coord=coord, from_name=decl_name, to_name=result)
-            ]
+                ops += list(self.visit_child(assignment_body))
+                ops += [
+                    Zero(coord=coord, name=result),
+                    Move(coord=coord, from_name=decl_name, to_name=result)
+                ]
 
-            self.pop_decl()
+                self.pop_decl()
 
         return ops
 

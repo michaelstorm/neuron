@@ -1,4 +1,5 @@
 from collections import namedtuple
+from pycparser import c_ast
 
 from .console import colored_text, TextColor
 from .tape_indices import TapeIndices
@@ -102,6 +103,27 @@ class SetValue(commandtuple('SetValue', ['coord', 'name', 'value', 'type'])):
         # zeroing out value is necessary for comma-separated expression lists to result in the
         # correct value
         return self.format_bf('{}>[-]{}+{}<', pos, bf_value, pos)
+
+
+class SetArrayValues(commandtuple('SetArrayValues', ['coord', 'name', 'values', 'type'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        pos = declaration_mapper[self.name].position
+        bf = '!{}>'.format(pos)
+
+        for i, value in enumerate(self.values):
+            if self.type in ('int', 'string'):
+                bf_value = value
+            elif self.type == 'char':
+                bf_value = ord(value[1])
+            else:
+                raise Exception('Unknown type %s' % self.type)
+
+            # zeroing out value is necessary for comma-separated expression lists to result in the
+            # correct value
+            bf += '[-]{}+3>'.format(bf_value)
+
+        bf += '{}<'.format(pos + 3 * len(self.values))
+        return self.format_bf(bf)
 
 
 class AddressOf(commandtuple('SetValue', ['coord', 'result_name', 'expr'])):

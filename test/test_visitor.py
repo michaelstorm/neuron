@@ -43,6 +43,18 @@ class VisitorTest(TestCase):
         self.assertEqual(Zero(name='x', coord=':4'), main[0].ops[1])
         self.assertEqual(Move(from_name='x~0', to_name='x', coord=':4'), main[0].ops[2])
 
+    def test_initlist(self):
+        source = """
+        int main()
+        {
+            int x[2] = {2, 3};
+        }
+        """
+
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(2, runtime.get_array_value('x', 0))
+        self.assertEqual(3, runtime.get_array_value('x', 1))
+
     def test_math(self):
         source = "int main() { int x; }"
         *_, runtime = self.execute_code(source)
