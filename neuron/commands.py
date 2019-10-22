@@ -163,6 +163,43 @@ class Multiply(commandtuple('Multiply', ['coord', 'result_name', 'first_name', '
             copy_command.to_bf(declaration_mapper, stack_index + 1), first_pos, first_pos)
 
 
+def greater_base(self, declaration_mapper, stack_index, greater_than, or_equal):
+    first_move = Move(coord=self.coord, from_name=self.first_name if greater_than else self.second_name, to_name=stack_index + 4)
+    second_move = Move(coord=self.coord, from_name=self.second_name if greater_than else self.first_name, to_name=stack_index + 5)
+    result_pos = declaration_mapper[self.result_name].position
+
+    # from https://stackoverflow.com/a/13327857
+    return self.format_bf('{}{} {} !>>+>> {}>+< [->-[>]<<] <[-{}+{}] <[-<]< {}',
+        first_move.to_bf(declaration_mapper, stack_index + 6),
+        second_move.to_bf(declaration_mapper, stack_index + 6),
+        bf_travel(0, stack_index),
+        '+' if or_equal else '',
+        bf_travel(stack_index + 2, result_pos),
+        bf_travel(result_pos, stack_index + 2),
+        bf_travel(stack_index, 0),
+    )
+
+
+class GreaterOrEqual(commandtuple('GreaterOrEqual', ['coord', 'result_name', 'first_name', 'second_name'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        return greater_base(self, declaration_mapper, stack_index, True, True)
+
+
+class Greater(commandtuple('Greater', ['coord', 'result_name', 'first_name', 'second_name'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        return greater_base(self, declaration_mapper, stack_index, True, False)
+
+
+class LesserOrEqual(commandtuple('LesserOrEqual', ['coord', 'result_name', 'first_name', 'second_name'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        return greater_base(self, declaration_mapper, stack_index, False, True)
+
+
+class Lesser(commandtuple('Lesser', ['coord', 'result_name', 'first_name', 'second_name'])):
+    def to_bf(self, declaration_mapper, stack_index):
+        return greater_base(self, declaration_mapper, stack_index, False, False)
+
+
 class Print(commandtuple('Print', ['coord', 'output_name'])):
     def to_bf(self, declaration_mapper, stack_index):
         pos = declaration_mapper[self.output_name].position

@@ -55,7 +55,7 @@ class VisitorTest(TestCase):
         self.assertEqual(2, runtime.get_array_value('x', 0))
         self.assertEqual(3, runtime.get_array_value('x', 1))
 
-    def test_math(self):
+    def test_nested_math(self):
         source = "int main() { int x; }"
         *_, runtime = self.execute_code(source)
         self.assertEqual(0, runtime.get_declaration_value('x'))
@@ -71,6 +71,122 @@ class VisitorTest(TestCase):
         source = "int main() { int x = 2 * 3 + 5; }"
         *_, runtime = self.execute_code(source)
         self.assertEqual(11, runtime.get_declaration_value('x'))
+
+    def test_greater(self):
+        source = "int main() { int x = 3 > 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 > 3; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 > 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 1 > 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 1 > 0; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 0 > 1; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 0 > 0; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+    def test_greater_or_equal(self):
+        source = "int main() { int x = 3 >= 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 >= 3; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 >= 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 1 >= 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 1 >= 0; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 0 >= 1; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 0 >= 0; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+    def test_lesser(self):
+        source = "int main() { int x = 3 < 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 < 3; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 < 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 1 < 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 1 < 0; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 0 < 1; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 0 < 0; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+    def test_lesser_or_equal(self):
+        source = "int main() { int x = 3 <= 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 <= 3; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 2 <= 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 1 <= 2; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 1 <= 0; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(0, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 0 <= 1; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
+
+        source = "int main() { int x = 0 <= 0; }"
+        *_, runtime = self.execute_code(source)
+        self.assertEqual(1, runtime.get_declaration_value('x'))
 
     def test_if(self):
         source = """

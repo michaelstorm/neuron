@@ -291,11 +291,22 @@ class BrainfuckCompilerVisitor(c_ast.NodeVisitor):
         self.pop_decl()
 
         if node.op == '+':
-            ops.append(Add(coord=str(node.coord), result_name=self.decl_name_stack[-1].name,
-                           first_name=first_name, second_name=second_name))
+            op_class = Add
         elif node.op == '*':
-            ops.append(Multiply(coord=str(node.coord), result_name=self.decl_name_stack[-1].name,
-                                first_name=first_name, second_name=second_name))
+            op_class = Multiply
+        elif node.op == '>=':
+            op_class = GreaterOrEqual
+        elif node.op == '>':
+            op_class = Greater
+        elif node.op == '<=':
+            op_class = LesserOrEqual
+        elif node.op == '<':
+            op_class = Lesser
+        else:
+            raise Exception('Unknown binary op {}'.format(node.op))
+
+        ops.append(op_class(coord=str(node.coord), result_name=self.decl_name_stack[-1].name,
+                            first_name=first_name, second_name=second_name))
 
         return ops
 
