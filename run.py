@@ -3,6 +3,7 @@ from neuron.bf import BrainfuckRuntime
 
 from pycparser import parse_file
 import re
+import sys
 
 
 def pretty_print_bf(code):
@@ -61,7 +62,7 @@ def pretty_print_bf(code):
 
 
 if __name__ == "__main__":
-    filename = 'hash.c'
+    filename = sys.argv[1]
     ast = parse_file(filename, use_cpp=True)
 
     with open(filename, 'r') as f:

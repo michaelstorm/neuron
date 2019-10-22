@@ -20,12 +20,13 @@ class State:
 
 
 class BrainfuckRuntime:
-    def __init__(self, declaration_mapper, source, static_data, symbol_table):
+    def __init__(self, declaration_mapper, source, static_data, symbol_table, print_tape_sections=True):
         self.states = []
         self.source = source
         self.static_data = static_data
         self.symbol_table = symbol_table
         self.declaration_mapper = declaration_mapper
+        self.print_tape_sections = print_tape_sections
         self.modified_indices = []
         self.breakpoints = []
 
@@ -94,11 +95,14 @@ class BrainfuckRuntime:
         print('{}: {}'.format(state.instr_count, code_lines))
 
     def print_tape(self, state):
-        tape_sections = [('', [TapeIndices.START, TapeIndices.END_STOP_INDICATOR]),
-                         ('ip', [TapeIndices.START_IP_WORKSPACE, TapeIndices.END_IP_WORKSPACE]),
-                         ('stack', [TapeIndices.START_STACK, TapeIndices.END_STACK]),
-                         ('lvalues', [TapeIndices.START_LVALUES, TapeIndices.END_LVALUES]),
-                         ('static', [TapeIndices.START_STATIC_SEGMENT, len(self.states[0].tape) - 1])]
+        if self.print_tape_sections:
+            tape_sections = [('', [TapeIndices.START, TapeIndices.END_STOP_INDICATOR]),
+                             ('ip', [TapeIndices.START_IP_WORKSPACE, TapeIndices.END_IP_WORKSPACE]),
+                             ('stack', [TapeIndices.START_STACK, TapeIndices.END_STACK]),
+                             ('lvalues', [TapeIndices.START_LVALUES, TapeIndices.END_LVALUES]),
+                             ('static', [TapeIndices.START_STATIC_SEGMENT, len(self.states[0].tape) - 1])]
+        else:
+            tape_sections = []
 
         lvalue_offsets = []
         mark_offsets = []
@@ -139,18 +143,19 @@ class BrainfuckRuntime:
         for mark_index, offset in enumerate(mark_offsets):
             mark_line = mark_line.ljust(offset) + 'v'
 
-        lvalue_line = ''
-        for lvalue_index, offset in enumerate(lvalue_offsets):
-            c = ''
-            pointer_dist = state.pointer - TapeIndices.START_LVALUES
-            if lvalue_index - (lvalue_index % 3) == pointer_dist - (pointer_dist % 3):
-                if lvalue_index % 3 == 0:
-                    c = '#'
-                elif lvalue_index % 3 == 1:
-                    c = '?'
-                elif lvalue_index % 3 == 2:
-                    c = '^'
-            lvalue_line = lvalue_line.ljust(offset) + c
+        if self.print_tape_sections:
+            lvalue_line = ''
+            for lvalue_index, offset in enumerate(lvalue_offsets):
+                c = ''
+                pointer_dist = state.pointer - TapeIndices.START_LVALUES
+                if lvalue_index - (lvalue_index % 3) == pointer_dist - (pointer_dist % 3):
+                    if lvalue_index % 3 == 0:
+                        c = '#'
+                    elif lvalue_index % 3 == 1:
+                        c = '?'
+                    elif lvalue_index % 3 == 2:
+                        c = '^'
+                lvalue_line = lvalue_line.ljust(offset) + c
 
         section_line = ''
         for section_name in section_names:
@@ -158,8 +163,10 @@ class BrainfuckRuntime:
 
         print(prefix + ' ' * 5 + mark_line)
         print('{}{}{}'.format(prefix, '({}) '.format(self.states[0].pointer).ljust(5), colored_tape))
-        print(prefix + ' ' * 5 + lvalue_line)
-        print(prefix + ' ' * 5 + section_line + '\n')
+
+        if self.print_tape_sections:
+            print(prefix + ' ' * 5 + lvalue_line)
+            print(prefix + ' ' * 5 + section_line + '\n')
 
     def print_variables(self, state):
         # [0] prevents an empty declaration_position from causing max() to raise error
@@ -187,8 +194,9 @@ class BrainfuckRuntime:
             print(text + '\n')
 
     def print_state(self, state, code):
-        self.print_source(state)
-        print()
+        if self.source:
+            self.print_source(state)
+            print()
 
         self.print_bf(state, code)
         self.print_tape(state)
@@ -238,14 +246,14 @@ class BrainfuckRuntime:
 
         return index
 
-    def execute(self, code, debug=False):
-        step_into = False
+    def execute(self, code, debug=False, start_break=False):
+        step_into = start_break
         step_over = False
         step_over_start = None
         prompt_once = False
         comment = False
         color_code = False
-        previous_input_line = 'c'
+        previous_input_line = 's' if start_break else 'c'
         skip_breakpoints = not debug
 
         tape = [0] * (TapeIndices.START_STATIC_SEGMENT + 16)
@@ -254,7 +262,7 @@ class BrainfuckRuntime:
 
         while state.index < len(code):
             if state.pointer < 0:
-                raise Exception("Bad tape pointer: {}".format(state.pointer))
+                raise Exception("Bad tape pointer: {} at index {}".format(state.pointer, state.index))
 
             op = code[state.index]
 
